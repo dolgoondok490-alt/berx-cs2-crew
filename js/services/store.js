@@ -86,6 +86,9 @@
       const empty = emptyState(true);
       let cached = {};
       try { cached = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { cached = {}; }
+      // localStorage-д хадгалагдсан хуучин matchDetails (жишээ нь 520 гэсэн тоо) → зөвхөн array-г үлдээнэ
+      if (cached.matchDetails && typeof cached.matchDetails === 'object') cached.matchDetails = Object.fromEntries(Object.entries(cached.matchDetails).filter(([, v]) => Array.isArray(v)));
+      else delete cached.matchDetails;
       state = Object.assign(empty, cached, { live: true, prefs: { simulate: false } });
       listeners.forEach(fn => fn(state));
     },

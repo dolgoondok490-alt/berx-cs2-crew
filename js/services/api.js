@@ -42,8 +42,8 @@
   function me() { const s = S.get().session; return s ? member(s.userId) : null; }
   function matchesOf(id) {
     const st = S.get();
-    if (st.live) return (st.matchDetails && st.matchDetails[id]) || [];
-    return (M.MATCHES && M.MATCHES[id]) || [];
+    if (st.live) { const v = st.matchDetails && st.matchDetails[id]; return Array.isArray(v) ? v : []; }
+    const v = M.MATCHES && M.MATCHES[id]; return Array.isArray(v) ? v : [];
   }
   // Map жагсаалтад байхгүй (Overpass, Vertigo, Train...) map-д fallback
   function mapInfo(id) {
@@ -52,8 +52,9 @@
     const name = String(id || '?').replace(/^\w/, c => c.toUpperCase());
     return { id, name: id === 'dust2' ? 'Dust II' : name, img: null };
   }
-  const isLiveM = (m) => S.get().live && m && m.live && m.live.periods;
+  const isLiveM = (m) => !!(S.get().live && m && m.live && m.live.periods && m.live.periods.all && Array.isArray(m.live.weeks));
   function inWindow(list, period, offset = 0) {
+    if (!Array.isArray(list)) return [];
     const days = PERIODS[period] || 9999;
     const now = Date.now();
     const to = now - offset * days * DAY, from = to - days * DAY;
@@ -61,6 +62,7 @@
   }
 
   function aggregate(list) {
+    if (!Array.isArray(list)) list = [];
     const n = list.length;
     if (!n) return { matches: 0, kd: 0, wr: 0, hs: 0, adr: 0, rating: 0, k: 0, d: 0, a: 0, eloGain: 0, ratingGain: 0, wins: 0 };
     let k = 0, d = 0, a = 0, w = 0, eg = 0, rg = 0;
@@ -78,13 +80,15 @@
   function liveAgg(m) {
     const L = m && m.live; if (!L) return null;
     const o = {};
-    ['kd', 'wr', 'hs', 'adr', 'matches'].forEach(k => { if (L[k] !== undefined && L[k] !== null) o[k] = L[k]; });
+    ['kd', 'wr', 'hs', 'adr'].forEach(k => { if (typeof L[k] === 'number') o[k] = L[k]; });
+    const cnt = typeof L.matchCount === 'number' ? L.matchCount : typeof L.matches === 'number' ? L.matches : null; // хуучин: matches = тоо
+    if (cnt !== null) o.matches = cnt;
     return o;
   }
 
   function statsFor(id, period = 'all') {
     const mem = member(id); if (!mem) return null;
-    const all = matchesOf(id);
+    const all = Array.isArray(matchesOf(id)) ? matchesOf(id) : [];
     const list = period === 'all' ? all : inWindow(all, period);
     const agg = aggregate(list);
     const mapWR = {};

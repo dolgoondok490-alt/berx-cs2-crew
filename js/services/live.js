@@ -87,7 +87,8 @@
     const m = A.me && A.me();
     if (autoSynced || !m || !m.steamId) return;
     autoSynced = true;
-    if (!m.syncedAt || Date.now() - m.syncedAt > 30 * 60e3) A.syncStats(m.id).then(r => { if (r && r.ok && !r.cached) toast('Статистик автоматаар шинэчлэгдлээ 🔄', '📊'); });
+    // Хуучин бүтэцтэй (needsResync) эсвэл 30 минутаас хуучин бол дахин татна
+    if ((m.live && m.live.needsResync) || !m.syncedAt || Date.now() - m.syncedAt > 30 * 60e3) A.syncStats(m.id).then(r => { if (r && r.ok && !r.cached) toast('Статистик автоматаар шинэчлэгдлээ 🔄', '📊'); });
   }
   document.addEventListener('berx:login', () => { autoSynced = false; autoSync(); });
 
@@ -145,7 +146,8 @@
         try {
           const r = await api('matches/' + encodeURIComponent(userId));
           matchCache[userId] = key;
-          S.set(s => { s.matchDetails = { ...(s.matchDetails || {}), [userId]: r.matches || [] }; });
+          const list = Array.isArray(r.matches) ? r.matches : Array.isArray(r.matchHistory) ? r.matchHistory : []; // number/object ирвэл хоосон array
+          S.set(s => { s.matchDetails = { ...(s.matchDetails || {}), [userId]: list }; });
         } catch (e) { /* ignore */ } finally { delete inflight[userId]; }
       },
       async demoSteamLogin() { location.href = 'api/auth/steam'; return { ok: true }; },
