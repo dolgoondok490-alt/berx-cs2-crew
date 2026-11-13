@@ -52,6 +52,10 @@
     const name = String(id || '?').replace(/^\w/, c => c.toUpperCase());
     return { id, name: id === 'dust2' ? 'Dust II' : name, img: null };
   }
+  // LAN урилгын map-ууд: invites.map баганад "mirage,dust2" хэлбэрээр (хуучин нэг map-тай урилгатай нийцтэй)
+  const LAN_MAPS = ['mirage', 'dust2', 'inferno', 'nuke', 'ancient'];
+  function inviteMaps(inv) { return String((inv && inv.map) || '').split(',').map(s => s.trim()).filter(Boolean); }
+  function inviteMapsLabel(inv) { return inviteMaps(inv).map(id => mapInfo(id).name).join(' · '); }
   const isLiveM = (m) => !!(S.get().live && m && m.live && m.live.periods && m.live.periods.all && Array.isArray(m.live.weeks));
   function inWindow(list, period, offset = 0) {
     if (!Array.isArray(list)) return [];
@@ -425,7 +429,7 @@
 
   window.BerxAPI = {
     SOURCES, METRICS, AWARDS, PERIODS, maps: M.MAPS,
-    members, member, me, matchesOf, mapInfo, fromPeriod, statsFor, leaderboard, awards, faceitLevel, aggregate,
+    members, member, me, matchesOf, mapInfo, fromPeriod, LAN_MAPS, inviteMaps, inviteMapsLabel, statsFor, leaderboard, awards, faceitLevel, aggregate,
     notify, createInvite, respond, setExcuse, genExcuse, cancelInvite, activeInvites, simulateResponses,
     setAvailability, sendChat, presenceOf, uid,
     content: { challenges: M.CHALLENGES, excuseParts: M.EXCUSE_PARTS, quiz: M.QUIZ, get excusesSaid() { return M.EXCUSES_SAID || {}; } },

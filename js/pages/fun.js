@@ -37,7 +37,7 @@
     const tally = (k) => { const t = {}; Object.values(votes).forEach(v => v[k] && (t[v[k]] = (t[v[k]] || 0) + 1)); return t; };
     const tm = tally('mvp'), tb = tally('bot'), n = Object.keys(votes).length;
     const bars = (t, cls) => players.map(id => ({ id, n: t[id] || 0 })).sort((a, b) => b.n - a.n).map(x => `<div class="row" style="gap:8px;margin-bottom:6px">${Avatar(A.member(x.id), 24)}<span style="width:64px;font-size:12.5px;font-weight:600">${esc(A.member(x.id).nick)}</span><div class="bar" style="flex:1"><i style="width:${n ? x.n / n * 100 : 0}%;${cls === 'bot' ? 'background:linear-gradient(90deg,#6b6e76,#9a9ca3)' : ''}"></i></div><b class="mono" style="width:16px">${x.n}</b></div>`).join('');
-    return `<div class="muted" style="font-size:12.5px;margin-bottom:10px">Сүүлийн тоглолт: <b style="color:#fff">${inv ? inv.type + ' · ' + U.fmtDate(inv.start) + ' · ' + A.mapInfo(inv.map).name : 'Demo'}</b> · ${n} санал</div>
+    return `<div class="muted" style="font-size:12.5px;margin-bottom:10px">Сүүлийн тоглолт: <b style="color:#fff">${inv ? inv.type + ' · ' + U.fmtDate(inv.start) + (A.inviteMaps(inv).length ? ' · ' + A.inviteMapsLabel(inv) : '') : 'Demo'}</b> · ${n} санал</div>
       <div class="grid cols" style="--c:1fr 1fr;gap:14px">
         <div><div style="font-weight:800;margin-bottom:8px">🔥 MVP</div><div class="row wrap" style="gap:6px;margin-bottom:12px">${players.map(id => `<button class="fp ${mine.mvp === id ? 'on' : ''}" data-action="vote-match" data-k="mvp" data-id="${id}">${Avatar(A.member(id), 22)}${esc(A.member(id).nick)}</button>`).join('')}</div>${bars(tm, 'mvp')}</div>
         <div><div style="font-weight:800;margin-bottom:8px">🤖 BOT</div><div class="row wrap" style="gap:6px;margin-bottom:12px">${players.map(id => `<button class="fp ${mine.bot === id ? 'on' : ''}" data-action="vote-match" data-k="bot" data-id="${id}">${Avatar(A.member(id), 22)}${esc(A.member(id).nick)}</button>`).join('')}</div>${bars(tb, 'bot')}</div>
@@ -155,7 +155,7 @@
 
   const actions = {
     'spin-map'() { spinMap(); },
-    'map-to-invite'() { const inv = window.BerxPages.invite.ui(); inv.draft.map = S.get().lastMap || 'mirage'; inv.draft.randomMap = false; location.hash = 'invite'; },
+    'map-to-invite'() { const inv = window.BerxPages.invite.ui(); const id = S.get().lastMap; inv.draft.type = 'LAN'; inv.draft.slots = 10; if (A.LAN_MAPS.includes(id) && !inv.draft.maps.includes(id)) inv.draft.maps.push(id); location.hash = 'invite'; },
     'cap-pool'(el) { ui().captainPool = el.dataset.v; ui().captain = null; return true; },
     'spin-captain'() { spinCaptain(); },
     challenge() {

@@ -640,3 +640,15 @@ input[type=date].input, input[type=time].input { color-scheme: dark; }
 .avatar-up .cam svg { width: 16px; height: 16px; }
 .avatar-up:hover .cam { transform: scale(1.12); }
 .avatar-up:hover .av img, .avatar-up:hover .av .ph { filter: brightness(.75); }
+
+/* LAN map сонголт + lobby дахь map-ууд */
+.lan-maps { padding: 14px; border-radius: 12px; border: 1px solid rgba(255, 106, 0, .25); background: rgba(255, 106, 0, .04); animation: pageIn .3s var(--ease); }
+.maps.lan { grid-template-columns: repeat(5, 1fr); }
+.maps.lan .map-tile { aspect-ratio: .9; }
+.maps.lan .map-tile:not(.on) .im { filter: grayscale(.55) brightness(.7); }
+.maps.lan .map-tile.on .im { filter: none; }
+.inv-maps { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+.inv-map { position: relative; width: 92px; height: 58px; border-radius: 9px; overflow: hidden; border: 1px solid rgba(255, 106, 0, .45); box-shadow: 0 0 12px rgba(255, 106, 0, .15); }
+.inv-map .im { position: absolute; inset: 0; background: var(--img, linear-gradient(135deg, #3a3f46, #1c1e22)) center/cover; }
+.inv-map span { position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 4px 3px; font-size: 11px; font-weight: 800; text-align: center; background: linear-gradient(0deg, rgba(0, 0, 0, .9), transparent); }
+@media (max-width: 560px) { .maps.lan { grid-template-columns: repeat(3, 1fr); } .inv-map { width: calc(33.33% - 6px); } }

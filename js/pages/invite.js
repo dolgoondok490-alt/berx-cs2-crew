@@ -21,7 +21,8 @@
     const app = window.BerxApp.ui;
     if (!app.invite) app.invite = { tab: 'active', selected: null, draft: null, excuse: {} };
     app.invite.excuse ||= {};
-    if (!app.invite.draft) app.invite.draft = { type: 'FACEIT', date: today(), time: '21:00', slots: 5, map: 'mirage', randomMap: false, invited: A.members().map(m => m.id).filter(id => id !== A.me().id), message: '' };
+    if (app.invite.draft && !Array.isArray(app.invite.draft.maps)) app.invite.draft.maps = [];
+    if (!app.invite.draft) app.invite.draft = { type: 'FACEIT', date: today(), time: '21:00', slots: 5, maps: [], invited: A.members().map(m => m.id).filter(id => id !== A.me().id), message: '' };
     return app.invite;
   }
 
@@ -32,16 +33,17 @@
     if (inv.responses[inv.createdBy] && !inv.invited.includes(inv.createdBy)) groups[inv.responses[inv.createdBy]].unshift(inv.createdBy);
     const yes = groups.yes.slice(0, inv.slots);
     const full = groups.yes.length >= inv.slots;
-    const mp = A.mapInfo(inv.map);
+    const invMaps = A.inviteMaps(inv);
     const canAnswer = inv.status === 'active';
     return `
       <div class="card ${full ? 'glow' : ''}">
         ${CardHead('users', 'Live lobby', `<span class="display" style="font-size:24px"><span class="${full ? 'win' : 'accent'}">${groups.yes.length}</span><span class="dim"> / ${inv.slots}</span></span>`)}
         <div class="row wrap" style="gap:8px;margin-bottom:10px">
           <span class="chip accent type-${inv.type}">${inv.type}</span><span class="chip">${icon('cal').replace('<svg', '<svg style="width:13px"')} ${U.fmtDate(inv.start)}</span>
-          <span class="chip">${icon('map').replace('<svg', '<svg style="width:13px"')} ${mp ? mp.name : 'Random'}</span>
+          ${invMaps.length ? `<span class="chip">${icon('map').replace('<svg', '<svg style="width:13px"')} ${invMaps.length} map</span>` : ''}
           ${inv.status === 'cancelled' ? '<span class="chip loss">Цуцлагдсан</span>' : inv.start < Date.now() - 3 * 3600000 ? '<span class="chip">Дууссан</span>' : full ? '<span class="chip win">FULL STACK ✓</span>' : '<span class="chip warn">Бүрдэж байна</span>'}
         </div>
+        ${invMaps.length ? `<div class="inv-maps" aria-label="LAN map-ууд">${invMaps.map(id => { const mp = A.mapInfo(id); return `<div class="inv-map" title="${esc(mp.name)}"><div class="im" style="${mp.img ? `--img:url(${mp.img})` : ''}"></div><span>${esc(mp.name)}</span></div>`; }).join('')}</div>` : ''}
         <div class="muted" style="font-size:13px;margin-bottom:12px"><span style="display:inline-block;vertical-align:middle;margin-right:6px">${Avatar(A.member(inv.createdBy), 22)}</span><b style="color:#fff">${esc(A.member(inv.createdBy)?.nick)}</b>: “${esc(inv.message || '—')}”</div>
         <div class="lobby-slots">
           ${Array.from({ length: Math.min(inv.slots, 10) }).map((_, i) => yes[i]
@@ -95,7 +97,7 @@
       : my ? `<span class="chip ${my === 'yes' ? 'win' : my === 'no' ? 'loss' : 'warn'}">${AVAIL[my].e} ${AVAIL[my].s}</span>` : '<span class="chip accent">Шинэ</span>';
     return `<div class="inv-item ${sel ? 'sel' : ''}" data-action="select-invite" data-inv="${i.id}">
       <span class="tic type-${i.type}">${i.type.slice(0, 3).toUpperCase()}</span>
-      <div style="flex:1;min-width:0"><b>${i.type}</b> <span class="muted">· ${U.fmtDate(i.start)}</span><div class="dim" style="font-size:12px">${A.member(i.createdBy)?.nick} · ${yes}/${i.slots} тоглогч</div></div>${badge}</div>`;
+      <div style="flex:1;min-width:0"><b>${i.type}</b> <span class="muted">· ${U.fmtDate(i.start)}</span><div class="dim" style="font-size:12px">${esc(A.member(i.createdBy)?.nick || '—')} · ${yes}/${i.slots} тоглогч${A.inviteMaps(i).length ? ' · 🗺️ ' + esc(A.inviteMapsLabel(i)) : ''}</div></div>${badge}</div>`;
   }
 
   function render() {
@@ -123,11 +125,15 @@
               ? '<select class="input" id="f-slots" disabled title="LAN үед 10 хүн (5v5)"><option>10 · LAN 5v5</option></select>'
               : `<select class="input" id="f-slots" data-draft="slots">${[[2, 'Wingman 2v2'], [5, '5v5']].map(([v, l]) => `<option value="${v}" ${+d.slots === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`}</div>
           </div>
-          <div class="row between mt" style="margin-bottom:8px"><label class="muted" style="font-size:12px;font-weight:600">Газрын зураг (Map)</label>
-            <button type="button" class="row" data-action="draft" data-k="randomMap" data-v="${!d.randomMap}" style="gap:8px;font-size:12.5px">${icon('shuffle').replace('<svg', '<svg style="width:15px"')} Санамсаргүй <span class="toggle ${d.randomMap ? 'on' : ''}"></span></button></div>
-          <div class="maps" style="${d.randomMap ? 'opacity:.35;pointer-events:none' : ''}">
-            ${A.maps.map(m => `<button type="button" class="map-tile ${d.map === m.id ? 'on' : ''}" data-action="draft" data-k="map" data-v="${m.id}"><div class="im" style="${m.img ? `--img:url(${m.img})` : ''}"></div><span>${m.name}</span></button>`).join('')}
-          </div>
+          ${d.type === 'LAN' ? `
+          <div class="lan-maps mt">
+            <div class="row between" style="margin-bottom:8px"><label class="muted" style="font-size:12px;font-weight:600">LAN map-ууд <span class="accent">(${d.maps.length} сонгосон)</span></label>
+              <button type="button" class="link" data-action="draft-maps-all">${d.maps.length === A.LAN_MAPS.length ? 'Цэвэрлэх' : 'Бүгдийг сонгох'}</button></div>
+            <div class="maps lan" role="group" aria-label="LAN map сонгох">
+              ${A.LAN_MAPS.map(id => { const m = A.mapInfo(id); const on = d.maps.includes(id); return `<button type="button" class="map-tile ${on ? 'on' : ''}" data-action="draft-map" data-id="${id}" aria-pressed="${on}"><div class="im" style="${m.img ? `--img:url(${m.img})` : ''}"></div><span>${m.name}</span></button>`; }).join('')}
+            </div>
+            <div class="dim" style="font-size:11.5px;margin-top:6px">Нэг эсвэл хэд хэдэн map сонго — урилга хүлээн авсан хүн бүрт харагдана.</div>
+          </div>` : ''}
           <div class="row between mt" style="margin-bottom:8px"><label class="muted" style="font-size:12px;font-weight:600">Урих найзууд (${d.invited.length})</label>
             <button type="button" class="link" data-action="draft-all">${d.invited.length === A.members().length - 1 ? 'Бүгдийг болиулах' : 'Бүгдийг урих'}</button></div>
           <div class="friend-pick">${A.members().filter(m => m.id !== me.id).map(m => `<button type="button" class="fp ${d.invited.includes(m.id) ? 'on' : ''}" data-action="draft-friend" data-id="${m.id}">${Avatar(m, 26, { status: true })}${esc(m.nick)}</button>`).join('')}</div>
@@ -159,7 +165,10 @@
 
   const actions = {
     draft(el) { const d = ui().draft; let v = el.dataset.v; if (v === 'true' || v === 'false') v = v === 'true'; d[el.dataset.k] = v;
-      if (el.dataset.k === 'type') d.slots = v === 'LAN' ? 10 : (+d.slots === 10 ? 5 : d.slots); return true; },
+      if (el.dataset.k === 'type') { d.slots = v === 'LAN' ? 10 : (+d.slots === 10 ? 5 : d.slots); if (v !== 'LAN') d.maps = []; } // LAN-аас гарахад map-уудыг хаяна
+      return true; },
+    'draft-map'(el) { const d = ui().draft, id = el.dataset.id; if (!A.LAN_MAPS.includes(id)) return; d.maps = d.maps.includes(id) ? d.maps.filter(x => x !== id) : [...d.maps, id]; return true; },
+    'draft-maps-all'() { const d = ui().draft; d.maps = d.maps.length === A.LAN_MAPS.length ? [] : [...A.LAN_MAPS]; return true; },
     'draft-all'() { const d = ui().draft, all = A.members().map(m => m.id).filter(id => id !== A.me().id); d.invited = d.invited.length === all.length ? [] : all; return true; },
     'draft-friend'(el) { const d = ui().draft, id = el.dataset.id; d.invited = d.invited.includes(id) ? d.invited.filter(x => x !== id) : [...d.invited, id]; return true; },
     'draft-msg'() { const d = ui().draft; d.message = MSGS[Math.floor(Math.random() * MSGS.length)].replace('{t}', d.time).replace('{type}', d.type); return true; },
@@ -187,7 +196,9 @@
     const [h, m] = d.time.split(':').map(Number);
     const dt = new Date(d.date + 'T00:00:00'); dt.setHours(h, m, 0, 0);
     if (dt.getTime() < Date.now() - 5 * 60000) { window.BerxApp.toast('Өнгөрсөн цаг сонгосон байна ⏰', '⚠️'); return; }
-    const map = d.randomMap ? A.maps[Math.floor(Math.random() * A.maps.length)].id : d.map;
+    const lanMaps = d.type === 'LAN' ? A.LAN_MAPS.filter(id => (d.maps || []).includes(id)) : [];
+    if (d.type === 'LAN' && !lanMaps.length) { window.BerxApp.toast('LAN тоглолтод дор хаяж нэг map сонгоно уу 🗺️', '⚠️'); return; }
+    const map = lanMaps.join(','); // Premier / FACEIT-д map хадгалахгүй
     const inv = A.createInvite({ type: d.type, start: dt.getTime(), slots: d.type === 'LAN' ? 10 : +d.slots, map, invited: [...d.invited], message: d.message.trim() || `${d.type} ${d.time}. Ирээрэй!` });
     ui().selected = inv.id; ui().tab = 'active';
     ui().draft = null;
