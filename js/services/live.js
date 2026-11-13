@@ -74,6 +74,7 @@
         const client = window.supabase.createClient(cfg.url, cfg.key);
         client.channel('berx').on('broadcast', { event: 'changed' }, (msg) => {
           if (msg && msg.payload && msg.payload.fullstack) fullstack(msg.payload.fullstack);
+          if (msg && msg.payload && msg.payload.server) { document.dispatchEvent(new Event('berx:server')); return; } // зөвхөн SERVER хуудас шинэчлэгдэнэ
           if (S.get().session) kick();
         }).subscribe();
       } catch (e) { poll(5000); }

@@ -61,6 +61,10 @@ Steam нэвтрэлт өөрөө key шаардахгүй — key-гүй ч н�
 
 ---
 
+## 🎮 SERVER (BERX ARENA) — өөрийн CS2 сервер
+Сайтын **SERVER** цэс таны Windows компьютер дээрх CS2 Dedicated Server-тэй **BERX Agent**-ээр холбогдоно.
+Бүх заавар: [`agent/README.md`](agent/README.md) (Supabase `003_server.sql`, Vercel `SERVER_AGENT_SECRET`, `install-cs2.ps1`, `start-agent.bat`).
+
 ## 💻 Локал дээр ажиллуулах
 ```
 cp .env.example .env     # хүсвэл key-ээ бөглө (Supabase-гүй бол data/db.json-д хадгална)
