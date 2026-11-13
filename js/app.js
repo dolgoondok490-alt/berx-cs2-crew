@@ -214,7 +214,12 @@
     },
     'sync-stats'(el) {
       const id = el.dataset.id || A.me().id; el.disabled = true; el.innerHTML = '⏳ Татаж байна...';
-      A.syncStats(id).then(r => { toast(r.error ? r.error : r.source === 'live' ? 'Статистик шинэчлэгдлээ ✓ (Steam/FACEIT)' : 'Demo статистик шинэчлэгдлээ (server холбогдоогүй)', r.error ? '⚠️' : '🔄'); render(); });
+      A.syncStats(id, true).then(r => {
+        const msg = r.error ? r.error : r.source === 'live' ? (r.cached ? 'Саяхан шинэчилсэн (1 минутын дараа дахин)' : 'Статистик шинэчлэгдлээ ✓ FACEIT + Leetify') : 'Demo статистик шинэчлэгдлээ (server холбогдоогүй)';
+        toast(msg, r.error ? '⚠️' : '🔄');
+        if (r.warnings && r.warnings.length) toast(r.warnings[0], '⚠️');
+        render();
+      });
     },
     'demo-login'() { document.getElementById('a-login').value = 'dok@berx.mn'; document.getElementById('a-pass').value = window.BERX_MOCK.DEMO_PASSWORD; }
   };

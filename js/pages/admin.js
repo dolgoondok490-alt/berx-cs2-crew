@@ -157,9 +157,11 @@
       } catch (e) { window.BerxApp.toast('Зураг уншиж чадсангүй', '⚠️'); }
     });
     root.querySelector('#profile-form')?.addEventListener('submit', async e => {
-      e.preventDefault(); const f = new FormData(e.target);
+      e.preventDefault(); const f = new FormData(e.target); const prevSteam = A.me().steamId;
       const r = await A.profileUpdate({ nick: String(f.get('nick')).trim(), bio: String(f.get('title')).trim().slice(0, 160), steamId: String(f.get('steamId')).trim(), faceitNick: String(f.get('faceitNick')).trim() });
       if (r && r.error) return window.BerxApp.toast(r.error, '⚠️');
+      const newSteam = String(f.get('steamId')).trim();
+      if (A.isLive() && newSteam && newSteam !== (prevSteam || '')) { window.BerxApp.toast('Steam холбогдлоо — статистик татаж байна...', '🔄'); A.syncStats(A.me().id, true).then(() => window.BerxApp.render()); }
       ui().pdraft = null;
       window.BerxApp.toast('Профайл хадгалагдлаа ✓', '💾');
     });

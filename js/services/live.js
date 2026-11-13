@@ -9,7 +9,8 @@
 (function () {
   'use strict';
   const S = window.BerxStore, A = window.BerxAPI;
-  let refreshing = null, again = false, lastFull = 0;
+  let refreshing = null, again = false, lastFull = 0, autoSynced = false;
+  const matchCache = {}, inflight = {};
   const toast = (t, i) => document.dispatchEvent(new CustomEvent('berx:toast', { detail: { text: t, icon: i } }));
   const newId = () => (crypto.randomUUID ? crypto.randomUUID() : 'id-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 
@@ -81,13 +82,22 @@
     document.head.appendChild(s);
   }
 
+  // Нэвтэрсний дараа: өөрийн статистик 30 минутаас хуучин бол автоматаар шинэчилнэ
+  function autoSync() {
+    const m = A.me && A.me();
+    if (autoSynced || !m || !m.steamId) return;
+    autoSynced = true;
+    if (!m.syncedAt || Date.now() - m.syncedAt > 30 * 60e3) A.syncStats(m.id).then(r => { if (r && r.ok && !r.cached) toast('Статистик автоматаар шинэчлэгдлээ 🔄', '📊'); });
+  }
+  document.addEventListener('berx:login', () => { autoSynced = false; autoSync(); });
+
   /* ---------- BerxAPI override ---------- */
   function enable(health) {
     S.switchToLive();
     const me = () => A.me();
     Object.assign(A, {
       async register({ nick, login, password }) { try { await api('auth/register', { nick, login, password }); await refresh(); return { ok: true }; } catch (e) { return { error: e.message }; } },
-      async login(login, password) { try { await api('auth/login', { login, password }); await refresh(); return { ok: true }; } catch (e) { return { error: e.message }; } },
+      async login(login, password) { try { await api('auth/login', { login, password }); await refresh(); document.dispatchEvent(new Event('berx:login')); return { ok: true }; } catch (e) { return { error: e.message }; } },
       logout() { api('auth/logout', {}).finally(() => { S.set(s => { s.session = null; }); }); },
       account(id) { const m = A.member(id); return m && m.login ? { login: m.login.startsWith('steam:') ? 'Steam ' + m.login.slice(6) : m.login, kind: m.loginKind } : null; },
       setAvailability(value) { const id = me().id; S.set(s => { s.availability[id] = value; }); act('avail', { value }); },
@@ -119,16 +129,31 @@
       setAvatar({ dataUrl, preset } = {}) { act('profile.avatar', { dataUrl, preset }); },
       adminToggle(userId) { act('admin.toggle', { userId }); },
       adminRemove(userId) { act('admin.remove', { userId }); },
-      async syncStats(userId) {
-        try { const r = await api('stats/sync', { userId }); await refresh(); return { ok: true, source: 'live', warnings: r.warnings || [] }; }
-        catch (e) { return { error: e.message }; }
+      async syncStats(userId, force) {
+        try {
+          const r = await api('stats/sync', { userId, force: !!force }); await refresh();
+          delete matchCache[userId || me().id]; await A.loadMatches(userId || me().id);
+          return { ok: true, source: 'live', cached: !!r.cached, warnings: r.warnings || [] };
+        } catch (e) { return { error: e.message }; }
+      },
+      // Тоглолтын дэлгэрэнгүй түүх (FACEIT + Leetify) — хэрэгтэй үед л татна
+      async loadMatches(userId) {
+        const m = A.member(userId); if (!m || !m.syncedAt) return;
+        const key = userId + ':' + m.syncedAt;
+        if (matchCache[userId] === key || inflight[userId]) return;
+        inflight[userId] = true;
+        try {
+          const r = await api('matches/' + encodeURIComponent(userId));
+          matchCache[userId] = key;
+          S.set(s => { s.matchDetails = { ...(s.matchDetails || {}), [userId]: r.matches || [] }; });
+        } catch (e) { /* ignore */ } finally { delete inflight[userId]; }
       },
       async demoSteamLogin() { location.href = 'api/auth/steam'; return { ok: true }; },
       async checkSteamSession() { await refresh(); return A.me(); },
       refresh, markRead(ids) { S.set(s => { s.readNotifs = [...new Set([...(s.readNotifs || []), ...ids])].slice(-200); s.notifications.forEach(n => { if (ids.includes(n.id)) n.read = true; }); }); }
     });
     startRealtime(health.realtime);
-    return refresh();
+    return refresh().then(() => autoSync());
   }
 
   window.BerxLive = { enable, refresh };

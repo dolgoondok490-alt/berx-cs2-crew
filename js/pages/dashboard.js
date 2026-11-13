@@ -51,7 +51,7 @@
             <div class="row" style="gap:12px;margin-bottom:12px">${Avatar(A.member(inv.createdBy), 36)}<div style="flex:1;min-width:0"><b>${esc(A.member(inv.createdBy)?.nick)}</b> <span class="muted">урьж байна</span>
               <div class="muted" style="font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">“${esc(inv.message)}”</div></div></div>
             <div class="row between wrap" style="gap:12px">
-              <div><div class="muted" style="font-size:12px;margin-bottom:6px">${U.fmtDate(inv.start)} · ${A.maps.find(m => m.id === inv.map)?.name || 'Random'}</div>${countdownHTML(inv.start)}</div>
+              <div><div class="muted" style="font-size:12px;margin-bottom:6px">${U.fmtDate(inv.start)} · ${A.mapInfo(inv.map)?.name || 'Random'}</div>${countdownHTML(inv.start)}</div>
               <div style="text-align:right"><div class="display" style="font-size:30px"><span class="accent">${invYes}</span><span class="dim">/${inv.slots}</span></div><div class="muted" style="font-size:12px">лобби</div></div>
             </div>
             <div class="answer-bar mt">
@@ -112,6 +112,7 @@
 
   let timer;
   function mount() {
+    if (A.loadMatches && A.me()) A.loadMatches(A.me().id);
     clearInterval(timer);
     timer = setInterval(() => {
       document.querySelectorAll('[data-countdown]').forEach(el => {

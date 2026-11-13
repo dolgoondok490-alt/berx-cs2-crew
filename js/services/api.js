@@ -40,7 +40,19 @@
   function members() { return S.get().members; }
   function member(id) { return members().find(m => m.id === id); }
   function me() { const s = S.get().session; return s ? member(s.userId) : null; }
-  function matchesOf(id) { return (M.MATCHES && M.MATCHES[id]) || []; }
+  function matchesOf(id) {
+    const st = S.get();
+    if (st.live) return (st.matchDetails && st.matchDetails[id]) || [];
+    return (M.MATCHES && M.MATCHES[id]) || [];
+  }
+  // Map жагсаалтад байхгүй (Overpass, Vertigo, Train...) map-д fallback
+  function mapInfo(id) {
+    const m = M.MAPS.find(x => x.id === id);
+    if (m) return m;
+    const name = String(id || '?').replace(/^\w/, c => c.toUpperCase());
+    return { id, name: id === 'dust2' ? 'Dust II' : name, img: null };
+  }
+  const isLiveM = (m) => S.get().live && m && m.live && m.live.periods;
   function inWindow(list, period, offset = 0) {
     const days = PERIODS[period] || 9999;
     const now = Date.now();
@@ -51,9 +63,15 @@
   function aggregate(list) {
     const n = list.length;
     if (!n) return { matches: 0, kd: 0, wr: 0, hs: 0, adr: 0, rating: 0, k: 0, d: 0, a: 0, eloGain: 0, ratingGain: 0, wins: 0 };
-    let k = 0, d = 0, a = 0, w = 0, hs = 0, adr = 0, r = 0, eg = 0, rg = 0;
-    list.forEach(m => { k += m.k; d += m.d; a += m.a; w += m.result === 'W'; hs += m.hsPct; adr += m.adr; r += m.rating; eg += m.eloDelta; rg += m.ratingDelta; });
-    return { matches: n, k, d, a, wins: w, kd: +(k / Math.max(1, d)).toFixed(2), wr: Math.round(w / n * 100), hs: Math.round(hs / n), adr: Math.round(adr / n), rating: +(r / n).toFixed(2), eloGain: eg, ratingGain: rg };
+    let k = 0, d = 0, a = 0, w = 0, eg = 0, rg = 0;
+    const avg = (key) => { const v = list.map(x => x[key]).filter(x => x !== null && x !== undefined && !Number.isNaN(x)); return v.length ? v.reduce((s, x) => s + +x, 0) / v.length : 0; };
+    list.forEach(m => { k += m.k || 0; d += m.d || 0; a += m.a || 0; w += m.result === 'W'; eg += m.eloDelta || 0; rg += m.ratingDelta || 0; });
+    return { matches: n, k, d, a, wins: w, kd: +(k / Math.max(1, d)).toFixed(2), wr: Math.round(w / n * 100), hs: Math.round(avg('hsPct')), adr: Math.round(avg('adr')), rating: +avg('rating').toFixed(2), eloGain: eg, ratingGain: rg };
+  }
+  // Server-ийн бэлдсэн хугацааны нэгтгэл (live.periods / live.weeks) → aggregate хэлбэр
+  function fromPeriod(p) {
+    if (!p) return { matches: 0, kd: 0, wr: 0, hs: 0, adr: 0, rating: 0, k: 0, d: 0, a: 0, eloGain: 0, ratingGain: 0 };
+    return { matches: p.matches || 0, kd: p.kd ?? 0, wr: p.wr ?? 0, hs: p.hs ?? 0, adr: p.adr ?? 0, rating: p.rating ?? 0, k: p.k || 0, d: p.d || 0, a: p.a || 0, eloGain: p.premierDelta || 0, ratingGain: p.premierDelta || 0 };
   }
 
   // Steam/FACEIT/Leetify-ээс татсан нэгдсэн статистик (member.live)
@@ -80,6 +98,26 @@
     fm.forEach(x => { e -= x.eloDelta; trend.unshift({ elo: e, date: x.date }); });
     const prev = aggregate(inWindow(all, 'month', 1));
     const live = liveAgg(mem);
+    if (isLiveM(mem)) {
+      const L = mem.live, P = L.periods;
+      const prem = all.filter(x => x.type === 'Premier' && x.rank).slice(0, 25).reverse();
+      const ltrend = prem.length ? prem.map(x => ({ elo: x.rank, date: x.date })) : [{ elo: mem.premier || 0, date: Date.now() }];
+      const allMaps = [...new Set([...M.MAPS.map(x => x.id), ...all.map(x => x.map)])];
+      const mwr = {};
+      allMaps.forEach(id => { const ml = all.filter(x => x.map === id && (x.result === 'W' || x.result === 'L')); if (ml.length || M.MAPS.some(x => x.id === id)) mwr[id] = { played: ml.length, wr: ml.length ? Math.round(ml.filter(x => x.result === 'W').length / ml.length * 100) : 0 }; });
+      const cur = fromPeriod(P.month), prv = fromPeriod(L.weeks && L.weeks[1]);
+      const lifetime = fromPeriod(P.all);
+      return {
+        ...lifetime, ...(period === 'all' ? {} : fromPeriod(P[period])),
+        source: 'live', syncedAt: mem.syncedAt || null, premier: mem.premier, faceitElo: mem.faceitElo, level: L.faceitLevel || faceitLevel(mem.faceitElo),
+        faceit: L.faceit, premierStats: L.premierStats, warnings: L.warnings || [], loaded: !!(S.get().matchDetails && S.get().matchDetails[id]),
+        mapWR: mwr, trend: ltrend, trendLabel: 'Premier rating', last10: all.slice(0, 10), recent: all.slice(0, 30), all,
+        k: cur.k || lifetime.k, d: cur.d || lifetime.d, a: cur.a || lifetime.a,
+        ratingGain: P.month?.premierDelta || 0, eloGain: 0,
+        delta: { kd: cur.matches && prv.matches ? +(cur.kd - prv.kd).toFixed(2) : 0, wr: cur.matches && prv.matches ? cur.wr - prv.wr : 0, hs: cur.matches && prv.matches ? cur.hs - prv.hs : 0 },
+        demo: false
+      };
+    }
     return {
       ...agg, ...(live || {}), source: mem.statsSource || 'demo', syncedAt: mem.syncedAt || null, premier: mem.premier, faceitElo: mem.faceitElo, level: faceitLevel(mem.faceitElo),
       mapWR, trend, last10: all.slice(0, 10), recent: all.slice(0, 20),
@@ -94,13 +132,21 @@
     kd:       { label: 'K/D ratio', fmt: v => v.toFixed(2), get: (m, a) => a.kd },
     wr:       { label: 'Win rate', fmt: v => v + '%', get: (m, a) => a.wr },
     hs:       { label: 'Headshot %', fmt: v => v + '%', get: (m, a) => a.hs },
-    eloGain:  { label: 'Хамгийн их ELO нэмсэн', fmt: v => (v > 0 ? '+' : '') + v, get: (m, a) => a.eloGain },
+    eloGain:  { label: 'Хамгийн их rating нэмсэн', fmt: v => (v > 0 ? '+' : '') + v, get: (m, a) => a.eloGain },
     matches:  { label: 'Хамгийн олон тоглолт', fmt: v => v, get: (m, a) => a.matches }
   };
 
   function leaderboard(metric = 'premier', period = 'all') {
     const def = METRICS[metric];
     const rows = members().map(m => {
+      if (isLiveM(m)) {
+        const L = m.live;
+        const cur = fromPeriod(L.periods[period] || L.periods.all);
+        const prvAgg = period === 'all' ? fromPeriod(L.weeks[1]) : fromPeriod(period === 'week' ? L.weeks[1] : null);
+        const delta = (L.periods.week && L.periods.week.premierDelta) || 0;
+        const prevMember = { ...m, premier: (m.premier || 0) - delta };
+        return { m, agg: cur, value: def.get(m, cur) || 0, prevValue: def.get(prevMember, prvAgg.matches ? prvAgg : cur) || 0 };
+      }
       const all = matchesOf(m.id);
       let cur = aggregate(period === 'all' ? all : inWindow(all, period));
       if (period === 'all' && m.live) cur = { ...cur, ...liveAgg(m) };
@@ -141,7 +187,7 @@
 
   function awards(week = 0) {
     const st = S.get();
-    let rows = members().map(m => ({ m, agg: aggregate(inWindow(matchesOf(m.id), 'week', week)) }));
+    let rows = members().map(m => ({ m, agg: isLiveM(m) ? fromPeriod(m.live.weeks && m.live.weeks[week]) : aggregate(inWindow(matchesOf(m.id), 'week', week)) }));
     const out = {};
     const pick = (key, r, val) => { out[key] = r ? { member: r.m, value: val(r) } : null; };
     const hasMatchData = rows.some(r => r.agg.matches);
@@ -156,9 +202,11 @@
     } else {
       pick('CARRY', maxBy(rows, r => r.agg.kd), r => 'K/D ' + r.agg.kd.toFixed(2));
       pick('AIM_GOD', maxBy(rows, r => r.agg.hs), r => 'HS ' + r.agg.hs + '%');
-      pick('MVP', maxBy(rows, r => r.agg.rating), r => 'AVG R ' + r.agg.rating.toFixed(2));
-      pick('BOT', maxBy(rows, r => r.agg.kd, -1), r => 'K/D ' + r.agg.kd.toFixed(2));
-      pick('ELO_DONATOR', maxBy(rows, r => r.agg.eloGain, -1), r => (r.agg.eloGain > 0 ? '+' : '') + r.agg.eloGain + ' ELO');
+      const hasRating = rows.some(r => r.agg.matches && r.agg.rating);
+      pick('MVP', hasRating ? maxBy(rows, r => r.agg.rating) : maxBy(rows, r => r.agg.kd * (r.agg.wr || 50)), r => hasRating ? (st.live ? 'Leetify ' : 'AVG R ') + r.agg.rating.toFixed(2) : 'K/D ' + r.agg.kd.toFixed(2) + ' · WR ' + r.agg.wr + '%');
+      pick('BOT', rows.filter(r => r.agg.matches).length > 1 ? maxBy(rows, r => r.agg.kd, -1) : null, r => 'K/D ' + r.agg.kd.toFixed(2));
+      const donor = maxBy(rows, r => r.agg.eloGain, -1);
+      pick('ELO_DONATOR', donor && donor.agg.eloGain < 0 ? donor : null, r => r.agg.eloGain + (st.live ? ' Premier' : ' ELO'));
     }
     if (week === 0) {
       const tally = {}; Object.values(st.votes.CHICKEN || {}).forEach(t => tally[t] = (tally[t] || 0) + 1);
@@ -373,7 +421,7 @@
 
   window.BerxAPI = {
     SOURCES, METRICS, AWARDS, PERIODS, maps: M.MAPS,
-    members, member, me, matchesOf, statsFor, leaderboard, awards, faceitLevel, aggregate,
+    members, member, me, matchesOf, mapInfo, fromPeriod, statsFor, leaderboard, awards, faceitLevel, aggregate,
     notify, createInvite, respond, setExcuse, genExcuse, cancelInvite, activeInvites, simulateResponses,
     setAvailability, sendChat, presenceOf, uid,
     content: { challenges: M.CHALLENGES, excuseParts: M.EXCUSE_PARTS, quiz: M.QUIZ, get excusesSaid() { return M.EXCUSES_SAID || {}; } },

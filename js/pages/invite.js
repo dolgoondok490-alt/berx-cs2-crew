@@ -32,7 +32,7 @@
     if (inv.responses[inv.createdBy] && !inv.invited.includes(inv.createdBy)) groups[inv.responses[inv.createdBy]].unshift(inv.createdBy);
     const yes = groups.yes.slice(0, inv.slots);
     const full = groups.yes.length >= inv.slots;
-    const mp = A.maps.find(m => m.id === inv.map);
+    const mp = A.mapInfo(inv.map);
     const canAnswer = inv.status === 'active';
     return `
       <div class="card ${full ? 'glow' : ''}">

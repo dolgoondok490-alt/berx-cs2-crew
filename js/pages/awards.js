@@ -13,7 +13,7 @@
     const tally = {}; Object.values(st.votes.CHICKEN || {}).forEach(t => tally[t] = (tally[t] || 0) + 1);
     const totalVotes = Object.values(tally).reduce((a, b) => a + b, 0);
     const myVote = (st.votes.CHICKEN || {})[me.id];
-    let rows = A.members().map(m => ({ m, g: A.aggregate(A.matchesOf(m.id).filter(x => x.date > Date.now() - 30 * 86400000)) })).filter(r => r.g.matches);
+    let rows = A.members().map(m => ({ m, g: A.isLive() && m.live && m.live.periods ? A.fromPeriod(m.live.periods.month) : A.aggregate(A.matchesOf(m.id).filter(x => x.date > Date.now() - 30 * 86400000)) })).filter(r => r.g.matches);
     if (!rows.length) rows = A.members().filter(m => m.live && m.live.kd != null).map(m => ({ m, g: { kd: +m.live.kd, wr: Math.round(+m.live.wr || 0), eloGain: 0, d: '—', matches: m.live.matches } }));
     rows.sort((a, b) => a.g.kd - b.g.kd);
     const recs = st.manual[u.record] || {};

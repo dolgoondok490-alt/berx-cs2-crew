@@ -218,23 +218,27 @@
     </div>`;
   }
 
-  function MatchRow(x) {
-    const mp = API().maps.find(m => m.id === x.map);
-    const kd = x.k / Math.max(1, x.d);
+  function MatchRow(x, opts = {}) {
+    const mp = API().mapInfo(x.map);
+    const has = (v) => v !== null && v !== undefined && !Number.isNaN(v);
+    const kd = has(x.kd) ? +x.kd : has(x.k) && has(x.d) ? x.k / Math.max(1, x.d) : null;
+    const extra = [has(x.hsPct) ? Math.round(x.hsPct) + '% HS' : null, has(x.adr) ? Math.round(x.adr) + ' ADR' : null,
+      opts.rank && has(x.rank) ? `<span class="premier">${(+x.rank).toLocaleString('en-US')}${has(x.ratingDelta) && x.ratingDelta ? ` (${x.ratingDelta > 0 ? '+' : ''}${x.ratingDelta})` : ''}</span>` : null,
+      has(x.rating) && x.rating !== 0 ? 'LR ' + (x.rating > 0 ? '+' : '') + (+x.rating).toFixed(2) : null].filter(Boolean).join(' · ');
     return `<div class="match-row">
-      <div class="thumb" style="${mp.img ? `--img:url(${mp.img})` : ''}"></div>
-      <div><b>${mp.name}</b><div class="dim" style="font-size:11.5px"><span class="${x.type === 'Premier' ? 'premier' : 'accent'}">◆</span> ${x.type} · ${fmtDate(x.date)}</div></div>
-      <span class="wl-badge ${x.result}">${x.result}</span>
-      <b class="mono">${x.score}</b>
-      <div class="hide-s kda mono">${x.k} / ${x.d} / ${x.a}<div class="dim" style="font-size:11px">K/D/A · ${x.hsPct}% HS · ${x.adr} ADR</div></div>
-      <b class="rt mono ${kd >= 1 ? 'win' : 'loss'}">${kd.toFixed(2)}</b>
+      <div class="thumb" style="${mp.img ? `--img:url(${mp.img})` : 'background:linear-gradient(135deg,#3a3f46,#1c1e22)'}"></div>
+      <div><b>${esc(mp.name)}</b><div class="dim" style="font-size:11.5px"><span class="${x.type === 'Premier' ? 'premier' : x.type === 'FACEIT' ? 'accent' : ''}">◆</span> ${esc(x.type)} · ${fmtDate(x.date)}</div></div>
+      <span class="wl-badge ${esc(x.result)}">${esc(x.result)}</span>
+      <b class="mono">${esc(x.score)}</b>
+      <div class="hide-s kda mono">${has(x.k) ? `${x.k} / ${x.d} / ${has(x.a) ? x.a : '—'}` : '—'}<div class="dim" style="font-size:11px">K/D/A${extra ? ' · ' + extra : ''}</div></div>
+      <b class="rt mono ${kd === null ? 'dim' : kd >= 1 ? 'win' : 'loss'}">${kd === null ? '—' : kd.toFixed(2)}</b>
     </div>`;
   }
 
   function WLChip(x) {
-    const mp = API().maps.find(m => m.id === x.map);
+    const mp = API().mapInfo(x.map);
     return `<div class="wl ${x.result}" style="${mp.img ? `--img:url(${mp.img})` : ''}" title="${mp.name} · ${x.type} · ${fmtDate(x.date)}">
-      <div class="m">${mp.name}</div><div class="r">${x.result}</div><div class="s">${x.score.replace(' – ', '-')}</div></div>`;
+      <div class="m">${esc(mp.name)}</div><div class="r">${esc(x.result)}</div><div class="s">${esc(String(x.score || '').replace(' – ', '-'))}</div></div>`;
   }
 
   function LineChart(points, opts = {}) {
