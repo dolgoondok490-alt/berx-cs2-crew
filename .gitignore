@@ -1,6 +1,6 @@
 .env
 server/.env
-data/
+/data/
 node_modules/
 .vercel
 .DS_Store

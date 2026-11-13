@@ -26,6 +26,7 @@
     refreshing = (async () => {
       try {
         const st = await api('state');
+        if (!st.me) { if (S.get().session) S.set(s => { s.session = null; }); return; }
         S.set(s => {
           const read = new Set(s.readNotifs || []);
           Object.assign(s, {

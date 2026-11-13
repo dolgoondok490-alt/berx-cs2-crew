@@ -40,7 +40,7 @@
   function members() { return S.get().members; }
   function member(id) { return members().find(m => m.id === id); }
   function me() { const s = S.get().session; return s ? member(s.userId) : null; }
-  function matchesOf(id) { return M.MATCHES[id] || []; }
+  function matchesOf(id) { return (M.MATCHES && M.MATCHES[id]) || []; }
   function inWindow(list, period, offset = 0) {
     const days = PERIODS[period] || 9999;
     const now = Date.now();
@@ -167,7 +167,7 @@
       const a = topCount(st.manual.afk); out.AFK_KING = a && member(a.id) ? { member: member(a.id), value: a.n + ' удаа AFK' } : null;
       const e = topCount(st.manual.excuse); out.EXCUSE_MASTER = e && member(e.id) ? { member: member(e.id), value: e.n + ' шалтаг' } : null;
     } else {
-      const past = (st.history && st.history[week]) || (st.live ? {} : M.PAST_MANUAL_AWARDS[week]) || {};
+      const past = (st.history && st.history[week]) || (st.live ? {} : (M.PAST_MANUAL_AWARDS || {})[week]) || {};
       ['CHICKEN', 'ALWAYS_LATE', 'AFK_KING', 'EXCUSE_MASTER'].forEach(k => {
         out[k] = past[k] && member(past[k]) ? { member: member(past[k]), value: 'Түүх' } : null;
       });
@@ -364,7 +364,7 @@
 
   function presenceOf(id) {
     const st_ = S.get(); const p = st_.presence[id] || 'offline';
-    const last = st_.live ? (st_.lastSeen && st_.lastSeen[id] ? Date.now() - st_.lastSeen[id] : null) : M.LAST_SEEN[id];
+    const last = st_.live ? (st_.lastSeen && st_.lastSeen[id] ? Date.now() - st_.lastSeen[id] : null) : (M.LAST_SEEN || {})[id];
     const m = member(id);
     // Steam төлөвийг зөвхөн бодит (live) өгөгдөл байгаа үед харуулна — хуурамчаар үүсгэхгүй
     const steam = m && m.statsSource === 'live' && m.live ? { inGame: !!m.live.inGame, persona: m.live.personaState } : null;
@@ -376,7 +376,7 @@
     members, member, me, matchesOf, statsFor, leaderboard, awards, faceitLevel, aggregate,
     notify, createInvite, respond, setExcuse, genExcuse, cancelInvite, activeInvites, simulateResponses,
     setAvailability, sendChat, presenceOf, uid,
-    content: { challenges: M.CHALLENGES, excuseParts: M.EXCUSE_PARTS, quiz: M.QUIZ, excusesSaid: M.EXCUSES_SAID },
+    content: { challenges: M.CHALLENGES, excuseParts: M.EXCUSE_PARTS, quiz: M.QUIZ, get excusesSaid() { return M.EXCUSES_SAID || {}; } },
     // ---------- Auth (DEMO) ----------
     // Бодит хувилбар: supabase.auth.signUp({ email | phone, password }) / signInWithPassword(...)
     detectBackend, get backend() { return backend; }, syncStats, demoSteamLogin, checkSteamSession, parseSteamId,

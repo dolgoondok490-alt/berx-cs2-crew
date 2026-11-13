@@ -248,9 +248,14 @@
   App.route = currentRoute();
   // 1) Server (Vercel/локал) байгаа эсэхийг шалгана → байвал LIVE, үгүй бол DEMO (preview)
   root.innerHTML = '<div style="min-height:100vh;display:grid;place-items:center"><div class="brand" style="align-items:center"><div class="logo" style="font-size:54px">BER<b>X</b></div><div class="sub">LOADING...</div></div></div>';
-  const timeout = new Promise(r => setTimeout(() => r(null), 2500));
+  const timeout = new Promise(r => setTimeout(() => r(null), 10000)); // Vercel cold start-д хангалттай
+  const loadScript = (src) => new Promise((ok, fail) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => fail(new Error(src + ' ачаалагдсангүй')); document.head.appendChild(s); });
   Promise.race([A.detectBackend(), timeout]).then(async b => {
-    if (b && window.BerxLive) {
+    if (!b || !window.BerxLive) {
+      // DEMO: server олдсонгүй (preview) → жишээ өгөгдлийг энд л ачаална
+      try { await loadScript('js/data/mock.js'); } catch (e) { console.warn(e.message); }
+      S.initDemo();
+    } else {
       await window.BerxLive.enable(b);
       const q = new URLSearchParams(location.search);
       if (q.get('steam_error')) { toast({ invalid: 'Steam нэвтрэлт амжилтгүй', verify: 'Steam баталгаажуулалт амжилтгүй', not_allowed: 'Энэ Steam данс зөвшөөрөгдөөгүй' }[q.get('steam_error')] || 'Steam алдаа', '⚠️'); history.replaceState(null, '', location.pathname + location.hash); }
@@ -258,5 +263,9 @@
     }
     App.booting = false;
     render();
+  }).catch(err => {
+    console.error(err);
+    App.booting = false;
+    root.innerHTML = `<div style="min-height:100vh;display:grid;place-items:center;padding:24px;text-align:center"><div><div class="logo display" style="font-size:44px">BERX</div><p class="muted">Ачаалахад алдаа гарлаа. Хуудсаа дахин ачаална уу.</p><pre style="color:#ff8b8b;white-space:pre-wrap;font-size:12px">${esc(err.message)}</pre><button class="btn primary" onclick="location.reload()">Дахин ачаалах</button></div></div>`;
   });
 })();

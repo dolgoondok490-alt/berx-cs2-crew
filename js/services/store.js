@@ -8,10 +8,20 @@
 (function () {
   'use strict';
   let KEY = 'berx.crew.v2';
-  const M = window.BERX_MOCK;
+  let ready = false;                       // initDemo() эсвэл switchToLive() дуудагдтал хадгалахгүй
   const clone = (o) => JSON.parse(JSON.stringify(o));
 
+  // Хуурамч өгөгдөлгүй хоосон төлөв (production/live болон эхлэлийн төлөв)
+  function emptyState(live) {
+    return { live: !!live, session: null, members: [], accounts: [], availability: {}, presence: {}, lastSeen: {}, invites: [], notifications: [], readNotifs: [],
+      chat: [], memes: [], manual: { late: {}, afk: {}, excuse: {} }, votes: { CHICKEN: {} }, matchVotes: {}, lastExcuse: {}, history: {}, lastMatchKey: null,
+      prefs: { simulate: false, sound: false }, lastMap: null };
+  }
+
+  // DEMO (server-гүй preview) — js/data/mock.js ачаалагдсаны дараа л дуудна
   function initialState() {
+    const M = window.BERX_MOCK || {};
+    if (!M.isDemo) return emptyState(false);
     return {
       session: null,                       // { userId }
       // DEMO бүртгэл. Бодит хувилбарт Supabase Auth (email+password, phone+password/OTP) хадгална.
@@ -36,16 +46,13 @@
     };
   }
 
-  let state;
-  try {
-    const raw = localStorage.getItem(KEY);
-    state = raw ? Object.assign(initialState(), JSON.parse(raw)) : initialState();
-  } catch (e) { state = initialState(); }
+  let state = emptyState(false);
 
   const listeners = new Set();
   let saveTimer = null;
 
   function persist() {
+    if (!ready) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       try { localStorage.setItem(KEY, JSON.stringify(state)); }
@@ -67,12 +74,16 @@
       if (!opts.silent) listeners.forEach(fn => fn(state));
     },
     subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
+    initDemo() {
+      KEY = 'berx.crew.v2'; ready = true;
+      try { const raw = localStorage.getItem(KEY); state = raw ? Object.assign(initialState(), JSON.parse(raw)) : initialState(); }
+      catch (e) { state = initialState(); }
+      state.live = false;
+    },
     // Server (live) горим: demo өгөгдлийг огт ашиглахгүй, хоосон төлөвөөс эхэлнэ
     switchToLive() {
-      KEY = 'berx.live.v1';
-      const empty = { live: true, session: null, members: [], accounts: [], availability: {}, presence: {}, lastSeen: {}, invites: [], notifications: [], readNotifs: [],
-        chat: [], memes: [], manual: { late: {}, afk: {}, excuse: {} }, votes: { CHICKEN: {} }, matchVotes: {}, lastExcuse: {}, history: {}, lastMatchKey: null,
-        prefs: { simulate: false, sound: false }, lastMap: null };
+      KEY = 'berx.live.v1'; ready = true;
+      const empty = emptyState(true);
       let cached = {};
       try { cached = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { cached = {}; }
       state = Object.assign(empty, cached, { live: true, prefs: { simulate: false } });
