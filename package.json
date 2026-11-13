@@ -1,0 +1,10 @@
+{
+  "name": "berx-cs2-crew",
+  "private": true,
+  "version": "1.0.0",
+  "description": "BERX CS2 CREW — найзуудын CS2 платформ",
+  "scripts": {
+    "dev": "node server/server.js"
+  },
+  "engines": { "node": ">=18" }
+}
