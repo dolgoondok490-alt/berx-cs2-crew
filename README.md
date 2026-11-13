@@ -29,7 +29,8 @@ server/server.js                 Локал хөгжүүлэлтийн server
 2. **SQL Editor → New query** → `supabase/schema.sql`-ийн агуулгыг бүхэлд нь paste → **Run**.
 3. **Project Settings → API Keys**-ээс:
    - Project URL → `SUPABASE_URL`
-   - **Secret** (service_role) key → `SUPABASE_SERVICE_ROLE_KEY` ⚠️ нууц
+   - **Secret** key (`sb_secret_...`) → `SUPABASE_SECRET_KEY` ⚠️ нууц (хуучин нэр `SUPABASE_SERVICE_ROLE_KEY` ч ажиллана)
+4. Дараа нь `supabase/002_permissions.sql`-ийг мөн ажиллуул (Data API эрх). Сүүлийн query бүх мөрөнд `service_role=true`, `anon=false` гэж харуулна.
    - **Publishable** (anon) key → `SUPABASE_PUBLISHABLE_KEY`
 
 ### 2. API key-ууд
@@ -45,17 +46,17 @@ Steam нэвтрэлт өөрөө key шаардахгүй — key-гүй ч н�
 ### 3. Vercel — сайт + API
 1. https://vercel.com → GitHub-аар нэвтэр → **Add New → Project** → `berx-cs2-crew` → **Import**.
 2. Framework Preset: **Other**. Build Command, Output Directory хоосон.
-3. **Environment Variables**: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_PUBLISHABLE_KEY`, `SESSION_SECRET`, `STEAM_API_KEY`, `FACEIT_API_KEY`, `LEETIFY_API_KEY`.
+3. **Environment Variables**: `ADMIN_LOGINS`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_PUBLISHABLE_KEY`, `SESSION_SECRET`, `STEAM_API_KEY`, `FACEIT_API_KEY`, `LEETIFY_API_KEY`.
 4. **Deploy** → `https://berx-cs2-crew.vercel.app` маягийн хаяг гарна.
 5. (Заавал биш) `ALLOWED_STEAM_IDS=7656...,7656...` — зөвхөн эдгээр Steam данс нэвтэрнэ.
 
 Шалгах: `https://<хаяг>/api/health` → `"db":"supabase"` ба `"realtime":{...}` гарвал бүх зүйл холбогдсон.
 
-**Анхны бүртгүүлсэн хүн автоматаар Admin болно** — эхэлж өөрөө бүртгүүлээрэй.
+**Admin эрх:** `ADMIN_LOGINS`-д өөрийн нэвтрэх имэйл, утас эсвэл SteamID64-өө бич (таслалаар хэд хэдийг). Тэр бүртгэл нэвтрэх үед автоматаар Admin болно, бусад хэн ч admin болохгүй. Хувийн мэдээлэл код/GitHub-д орохгүй.
 
 ### 🔐 Нууцлал
 - Бүх key зөвхөн Vercel-ийн Environment Variables-д. Код болон GitHub дээр **хэзээ ч** байхгүй (`.env` нь `.gitignore`-д).
-- Supabase хүснэгтүүдэд RLS асаалттай, policy байхгүй → browser өгөгдөлд шууд хүрэхгүй, зөвхөн server function дамжина.
+- Supabase хүснэгтүүдэд RLS асаалттай, `anon`/`authenticated`-аас бүх эрх хураагдсан → browser (publishable key) өгөгдөлд хүрэхгүй. Зөвхөн server function `sb_secret` key-ээр (`apikey` header) хандана.
 - Нууц үг `scrypt`-ээр hash-лагдана. Session нь HttpOnly, HMAC гарын үсэгтэй cookie.
 
 ---

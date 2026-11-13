@@ -113,7 +113,7 @@
       <div class="card">
         ${CardHead('crew', 'Бүртгэл')}
         <div class="big-num">${n}</div><div class="muted">бүртгэлтэй гишүүн</div>
-        <div class="note mt">Хүссэн хүн имэйл, утас эсвэл Steam-ээр бүртгүүлнэ. Хамгийн түрүүнд бүртгүүлсэн хүн автоматаар Admin болно. Зөвхөн найзуудаа оруулах бол Vercel дээр <code>ALLOWED_STEAM_IDS</code> тохируулна.</div>
+        <div class="note mt">Хүссэн хүн имэйл, утас эсвэл Steam-ээр бүртгүүлнэ. Admin эрхийг зөвхөн Vercel-ийн <code>ADMIN_LOGINS</code> тохиргоо (таны имэйл/утас/SteamID) өгнө. ${h.adminConfigured ? '' : '<b style="color:#ffb15c">⚠️ ADMIN_LOGINS тохируулаагүй байна.</b>'} Зөвхөн найзуудаа оруулах бол <code>ALLOWED_STEAM_IDS</code>.</div>
       </div>
     </div>`;
   }

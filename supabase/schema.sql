@@ -103,3 +103,8 @@ alter table votes enable row level security;
 alter table match_votes enable row level security;
 alter table records enable row level security;
 alter table notifications enable row level security;
+
+-- Data API эрх: зөвхөн server (service_role / sb_secret). Browser (anon) хандахгүй.
+grant usage on schema public to service_role;
+grant select, insert, update, delete on users, availability, invites, responses, chat, memes, votes, match_votes, records, notifications to service_role;
+revoke all on users, availability, invites, responses, chat, memes, votes, match_votes, records, notifications from anon, authenticated;
