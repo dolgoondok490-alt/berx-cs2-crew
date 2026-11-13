@@ -17,6 +17,7 @@
     return Math.floor(s / 86400) + ' өдрийн өмнө';
   }
   function fmtDate(t) {
+    if (!t) return '—';
     const d = new Date(t), now = new Date();
     const same = d.toDateString() === now.toDateString();
     const tm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
