@@ -53,8 +53,8 @@ for n in names:
 # Gloves / Agent: default render-ийн silhouette (сонголтгүй үед "muted" дүрс)
 silhouette(os.path.join(SRC, 'sporty_gloves-10018.png'), (120, 124, 132, 255), size=(320, 240)).save(os.path.join(OUT, 'gloves.webp'), 'WEBP', quality=85, method=6)
 silhouette(os.path.join(SRC, 'agent-4613.png'), (120, 124, 132, 255), size=(320, 240)).save(os.path.join(OUT, 'agent.webp'), 'WEBP', quality=85, method=6)
-ICONS = { 'rifles': 'weapon_ak47.png', 'snipers': 'weapon_awp.png', 'pistols': 'weapon_deagle.png', 'smgs': 'weapon_p90.png',
-          'heavy': 'weapon_nova.png', 'knives': 'weapon_knife_karambit.png', 'gloves': 'sporty_gloves-10018.png', 'agents': 'agent-4613.png' }
+ICONS = { 'rifles': 'weapon_ak47.png', 'snipers': 'weapon_awp.png', 'pistols': 'weapon_deagle.png', 'smgs': 'weapon_mp9.png',
+          'heavy': 'weapon_negev.png', 'knives': 'weapon_knife_karambit.png', 'gloves': 'sporty_gloves-10018.png', 'agents': 'agent-4613.png' }
 for k, f in ICONS.items():
     silhouette(os.path.join(SRC, f), (255, 255, 255, 255), height=64).save(os.path.join(OUT, 'icons', k + '.png'), optimize=True)
 print(f'{len(made)} default images, missing: {missing}, icons: {len(ICONS)} (WeaponPaints {PIN[:7]})')

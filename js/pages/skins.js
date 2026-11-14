@@ -31,7 +31,9 @@
   const wearOf = (w) => WEAR.find(([max]) => w < max) || WEAR[4];
   const DEMO_KEY = 'berx_skins_demo_v1';
   const DEF = (name) => `assets/weapons/${name}.webp`;
-  const ICON = (c) => `assets/weapons/icons/${c}.png`;
+  // CSS custom property доторх url() нь css/skins.css-ээс хамаарч шийдэгддэг тул бүтэн URL болгоно
+  const ICON = (c) => new URL(`assets/weapons/icons/${c}.png`, document.baseURI).href;
+  const SAVE_FAIL = 'Хадгалж чадсангүй. Дахин оролдоно уу.';
 
   let catalog = null, loading = null, byId = null, weaponByDef = null, itemsByDef = null, agentsByTeam = null;
   const S = {
@@ -104,18 +106,19 @@
   const countTeam = (team) => { const t = teamOf(S.saved, team); return Object.keys(t.weapons).length + (t.knife ? 1 : 0) + (t.gloves ? 1 : 0) + (t.agent ? 1 : 0); };
   const gunsOf = (c) => catalog.weapons.filter(w => w.c === c).sort((a, b) => ORDER.indexOf(a.w) - ORDER.indexOf(b.w));
 
-  /* ---------- sync төлөв (сайтад хадгалсан / DB-д синк / тоглоомд хэрэгжсэн) ---------- */
+  /* ---------- төлөв: хэрэглэгчид ойлгомжтой бичиг (логик нь хэвээр: сайтад хадгалсан → серверт синк → тоглоомд) ----------
+   *  Version, sync, database, API зэрэг техникийн мэдээллийг харуулахгүй. Серверт бодитоор синк хийгдээгүй бол "Серверт бэлэн" гэхгүй. */
   const chip = (cls, t) => `<span class="sk-sync ${cls}"><i></i>${t}</span>`;
   function syncBadge() {
     const st = S.status || {};
-    if (st.demo) return chip('dim', 'Demo — зөвхөн энэ хөтөчид хадгалагдана');
-    if (!S.version) return chip('dim', 'Loadout хоосон');
-    if (!st.syncEnabled) return chip('dim', `Сайтад хадгалсан (v${S.version}) · Серверийн синк идэвхгүй`);
+    if (S.saving) return chip('warn', 'Хадгалж байна...');
+    if (!S.version) return '';
+    if (st.demo || !st.syncEnabled) return chip('dim', 'Сонголт хадгалагдсан');
     const s = st.sync;
-    if (s && s.status === 'error') return chip('loss', 'Синкийн алдаа: ' + esc(s.error || ''));
-    if (!s || s.version < S.version) return chip('warn', st.server && st.server.online ? 'Сайтад хадгалсан · серверт синк хүлээгдэж байна…' : 'Сайтад хадгалсан · сервер offline, асахад синк хийнэ');
-    if (s.appliedAt && s.appliedAt >= (st.updatedAt || 0)) return chip('win', 'Тоглоомд хэрэгжсэн ✓');
-    return chip('win', 'Серверийн DB-д синк хийгдсэн ✓ · дараагийн respawn-д хэрэгжинэ');
+    if (s && s.status === 'error') return chip('dim', 'Сонголт хадгалагдсан');            // серверт хэрэгжээгүй — бэлэн гэж хэлэхгүй
+    if (!s || s.version < S.version) return st.server && st.server.online ? chip('warn', 'Серверт илгээж байна...') : chip('dim', 'Сервер асахад идэвхжинэ');
+    if (s.appliedAt && s.appliedAt >= (st.updatedAt || 0)) return chip('win', 'Тоглоомд идэвхтэй');
+    return chip('win', 'Серверт бэлэн');
   }
 
   /* ---------- Inventory card ---------- */
@@ -279,7 +282,7 @@
       </div>` : ''}
       ${p.kind !== 'agent' && it ? `<label class="sk-check skx-both"><input type="checkbox" id="skx-both" ${p.both ? 'checked' : ''}> ${other} loadout-д мөн хадгалах</label>` : ''}
       ${p.kind === 'agent' && it ? `<div class="note" style="font-size:12px;margin-top:8px">Agent зөвхөн ${TEAM_NAME[it.t]} багт хэрэглэгдэнэ.</div>` : ''}
-      ${p.err ? `<div class="skx-err" role="alert">⚠️ ${esc(p.err)}<div class="dim" style="font-size:11.5px;margin-top:2px">Хадгалагдаагүй — inventory өөрчлөгдөөгүй.</div></div>` : ''}
+      ${p.err ? `<div class="skx-err" role="alert">⚠️ ${esc(p.err)}</div>` : ''}
       <div class="skx-actions">
         <button class="btn primary" data-action="skx-save" ${it && changed(p) && !S.saving ? '' : 'disabled'}>${S.saving ? 'Хадгалж байна…' : 'Хадгалах'}</button>
         ${hasSaved ? `<button class="btn" data-action="skx-reset" ${S.saving ? 'disabled' : ''}>Default болгох</button>` : ''}
@@ -317,7 +320,7 @@
   function render() {
     if (!catalog || !S.saved) {
       const top = `<div class="skx-head"><div class="skx-title"><span class="skx-kicker">BERX ARENA · SERVER COSMETICS</span><h1>SKIN <em>INVENTORY</em></h1></div></div>`;
-      if (S.err) return top + `<div class="card empty-state"><div class="e">⚠️</div>${esc(S.err)}<br><button class="btn mt" data-action="skx-retry">Дахин оролдох</button></div>`;
+      if (S.err) return top + `<div class="card empty-state"><div class="e">⚠️</div>${/Steam/.test(S.err) ? 'Steam данс холбоно уу (Тохиргоо → Профайл).' : 'Ачаалж чадсангүй. Дахин оролдоно уу.'}<br><button class="btn mt" data-action="skx-retry">Дахин оролдох</button></div>`;
       return top + '<div class="card empty-state"><div class="e">⏳</div>Inventory ачаалж байна…</div>';
     }
     return `<div class="skx">
@@ -347,9 +350,9 @@
         startPoll();
       } else { S.version++; S.saved = next; demoWrite(); }
       S.pick = null; S.flash = flashKey; setTimeout(() => { if (S.flash === flashKey) { S.flash = null; if (location.hash === '#skins') rr(); } }, 1600);
-      toast(okMsg, '💾');
+      toast('Сонголт хадгалагдсан', '💾');
     } catch (e) {
-      if (S.pick) S.pick.err = e.message; else toast(e.message, '⚠️');
+      if (S.pick) S.pick.err = SAVE_FAIL; else toast(SAVE_FAIL, '⚠️');
     }
     S.saving = false; rr();
   }
@@ -391,7 +394,7 @@
       S.favorites = S.favorites.includes(id) ? S.favorites.filter(x => x !== id) : [id, ...S.favorites];
       rr();
       try { if (live()) await post('skins.favorites', { favorites: S.favorites }); else demoWrite(); }
-      catch (e) { S.favorites = prev; toast('Favorite хадгалагдсангүй: ' + e.message, '⚠️'); rr(); }
+      catch (e) { S.favorites = prev; toast(SAVE_FAIL, '⚠️'); rr(); }
     },
     'skx-save'() {
       const p = S.pick; if (!p || !p.sel || S.saving) return;
@@ -425,8 +428,8 @@
         try {
           if (live()) { await post('skins.clear', { confirm: 'CLEAR' }); await loadState(); startPoll(); }
           else { S.saved = empty(); S.version++; demoWrite(); }
-          toast('Loadout цэвэрлэгдлээ', '🧹');
-        } catch (e) { toast(e.message, '⚠️'); }
+          toast('Сонголт хадгалагдсан', '🧹');
+        } catch (e) { toast(SAVE_FAIL, '⚠️'); }
         rr();
       });
     }
@@ -458,6 +461,15 @@
     if (!catalog || !S.saved) { if (!loading || S.err) init(); else loading.then(() => { if (!S.saved) init(); }); }
     if (!keyBound) { document.addEventListener('keydown', onKey); keyBound = true; }
     document.body.classList.toggle('skx-lock', !!S.pick);
+    // Ангиллын мөр (mobile дээр хэвтээ scroll): render хийхэд байрлалаа алдахгүй, идэвхтэй ангилал харагдана
+    const nav = root.querySelector('.skx-cats');
+    if (nav) {
+      nav.scrollLeft = S.navScroll || 0;
+      const on = nav.querySelector('button.on');
+      if (on && (on.offsetLeft < nav.scrollLeft || on.offsetLeft + on.offsetWidth > nav.scrollLeft + nav.clientWidth)) nav.scrollLeft = on.offsetLeft - (nav.clientWidth - on.offsetWidth) / 2;
+      S.navScroll = nav.scrollLeft;
+      nav.addEventListener('scroll', () => { S.navScroll = nav.scrollLeft; }, { passive: true });
+    }
     const p = S.pick; if (!p) return;
     // render бүрт DOM шинэчлэгддэг тул жагсаалтын scroll, хайлтын focus-ийг сэргээнэ
     const pl = root.querySelector('#skx-pl');

@@ -26,9 +26,9 @@
 .skx-cats { display: flex; gap: 6px; overflow-x: auto; padding: 4px; margin-bottom: 14px; border-radius: 13px; background: rgba(0, 0, 0, .35); border: 1px solid var(--line); scrollbar-width: none; }
 .skx-cats::-webkit-scrollbar { display: none; }
 .skx-cats button { flex: 1 0 auto; min-width: 92px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 8px 10px 7px; border-radius: 10px; color: var(--muted); font-size: 11.5px; font-weight: 700; letter-spacing: .02em; position: relative; transition: color .15s, background .15s; }
-.skx-cats button:hover { color: #fff; background: rgba(255, 255, 255, .04); }
+@media (hover: hover) { .skx-cats button:hover { color: #fff; background: rgba(255, 255, 255, .04); } }
 .skx-cats button.on { color: var(--accent-2); background: var(--accent-soft); box-shadow: inset 0 0 0 1px rgba(255, 106, 0, .45); }
-.skx-ic { display: block; width: 46px; height: 20px; background: currentColor; -webkit-mask: var(--ic) center / contain no-repeat; mask: var(--ic) center / contain no-repeat; }
+.skx-ic { display: block; flex: none; width: 52px; height: 22px; background: currentColor; -webkit-mask: var(--ic) center / contain no-repeat; mask: var(--ic) center / contain no-repeat; }
 .skx-ic.all { background: none; -webkit-mask: none; mask: none; display: grid; place-items: center; }
 .skx-ic.all svg { width: 18px; height: 18px; }
 .skx-cats em { position: absolute; top: 4px; right: 6px; font-style: normal; font-size: 9.5px; font-weight: 800; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; display: grid; place-items: center; background: rgba(255, 255, 255, .08); color: var(--muted); }
