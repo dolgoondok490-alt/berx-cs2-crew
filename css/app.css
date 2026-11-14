@@ -635,6 +635,42 @@ input[type=date].input, input[type=time].input { color-scheme: dark; }
 .srv-missing { position: absolute; top: 6px; right: 6px; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 5px; background: rgba(255, 77, 79, .92); color: #fff; }
 .srv-map.missing .srv-map-pic { filter: grayscale(.7) brightness(.7); }
 .srv-now + .srv-missing { top: 28px; right: auto; left: 6px; }
+/* SERVER — Competitive / AIM tabs, Workshop map, AIM 1V1 */
+.srv-tabs { display: flex; gap: 4px; padding: 4px; margin-bottom: 14px; border-radius: 12px; background: rgba(0, 0, 0, .35); border: 1px solid var(--line); }
+.srv-tabs button { flex: 1; height: 38px; border-radius: 9px; font-family: var(--font-display); font-weight: 900; font-style: italic; font-size: 13.5px; letter-spacing: .02em; color: var(--muted); transition: all .2s var(--ease); position: relative; }
+.srv-tabs button .dim { font-style: normal; font-weight: 700; font-size: 11px; margin-left: 4px; }
+.srv-tabs button:hover { color: #fff; }
+.srv-tabs button.on { background: linear-gradient(180deg, #ff7a14, #e55500); color: #fff; box-shadow: 0 4px 14px rgba(255, 106, 0, .3); }
+.srv-tabs button.on .dim { color: rgba(255, 255, 255, .75); }
+.srv-tab-live { font-style: normal; color: var(--win); margin-left: 6px; font-size: 11px; animation: pulse 1.6s infinite; }
+.srv-tabs button.on .srv-tab-live { color: #fff; }
+.ws-maps { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.ws-map { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: rgba(0, 0, 0, .25); }
+.ws-map.current { border-color: var(--win); box-shadow: 0 0 18px rgba(57, 210, 122, .18); }
+.ws-pic { position: relative; aspect-ratio: 16 / 9; background: var(--img, linear-gradient(135deg, #3a3f46, #1c1e22)) center/cover; display: flex; align-items: flex-end; }
+.ws-pic::before { content: ''; position: absolute; inset: 0; background: linear-gradient(0deg, rgba(0, 0, 0, .85), transparent 60%); }
+.ws-pic .nm { position: relative; font-family: var(--font-display); font-weight: 900; font-style: italic; font-size: 18px; padding: 10px 12px; text-transform: uppercase; }
+.ws-badge { position: absolute; top: 8px; right: 8px; font-size: 9.5px; font-weight: 800; letter-spacing: .06em; padding: 3px 7px; border-radius: 5px; background: rgba(0, 0, 0, .7); border: 1px solid rgba(255, 106, 0, .55); color: var(--accent-2); }
+.ws-map .srv-now { top: 8px; left: 8px; }
+.ws-meta { padding: 10px 12px 12px; }
+.ws-meta .chip svg { width: 11px; height: 11px; }
+.aim-live { display: flex; gap: 14px; align-items: center; padding: 12px 14px; margin-bottom: 12px; border-radius: 12px; background: linear-gradient(90deg, rgba(255, 106, 0, .16), rgba(255, 106, 0, .03)); border: 1px solid rgba(255, 106, 0, .4); }
+.aim-form { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.aim-form .adm-row { flex-wrap: wrap; gap: 8px; }
+.aim-back { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line-2); font-size: 13px; color: var(--muted); }
+.ws-banner { border-color: rgba(245, 165, 36, .35); }
+.ws-banner.error { border-color: rgba(239, 75, 75, .45); }
+.ws-banner.ready { border-color: rgba(57, 210, 122, .35); }
+.ws-spin { width: 22px; height: 22px; border-radius: 50%; border: 3px solid rgba(255, 106, 0, .25); border-top-color: var(--accent); animation: ws-spin .9s linear infinite; flex: none; }
+@keyframes ws-spin { to { transform: rotate(360deg); } }
+.ws-ic { width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-weight: 900; flex: none; background: rgba(255, 255, 255, .06); }
+.ws-steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.ws-step { font-size: 11.5px; color: var(--dim); }
+.ws-step i { display: block; height: 4px; border-radius: 3px; background: rgba(255, 255, 255, .08); margin-bottom: 5px; }
+.ws-step.done { color: var(--muted); } .ws-step.done i { background: var(--win); }
+.ws-step.cur { color: #fff; font-weight: 700; } .ws-step.cur i { background: linear-gradient(90deg, var(--accent), rgba(255, 106, 0, .25)); background-size: 200% 100%; animation: ws-flow 1.2s linear infinite; }
+@keyframes ws-flow { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (max-width: 560px) { .srv-tabs button { font-size: 12px; } .ws-maps { grid-template-columns: 1fr; } .aim-form .adm-row { flex-direction: column; align-items: flex-start; } }
 .srv-vote-bar { height: 5px; border-radius: 3px; background: #26272c; overflow: hidden; margin-top: 8px; }
 .srv-vote-bar i { display: block; height: 100%; background: var(--accent); transition: width .6s var(--ease); }
 .teams-grid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: start; }

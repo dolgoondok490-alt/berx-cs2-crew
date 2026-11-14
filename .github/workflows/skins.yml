@@ -1,7 +1,7 @@
 name: BERX SKIN INVENTORY
 on:
   push:
-    branches: ['skins-inventory']
+    branches: ['skins-inventory', 'workshop-aim']
     paths: ['lib/**', 'agent/**', 'tests/skins/**', 'skins/**', 'assets/data/**', 'js/**', 'server/**', '.github/workflows/skins.yml']
   workflow_dispatch:
 permissions:

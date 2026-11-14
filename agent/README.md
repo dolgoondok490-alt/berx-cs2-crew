@@ -92,6 +92,29 @@ CS2_DIR=C:\cs2-server
 * `CS2_DIR` нь `game\csgo` хавтсыг агуулсан зам. SteamCMD-ээр суулгасан бол: `C:\cs2-server\steamcmd\steamapps\common\Counter-Strike Global Offensive`.
 * (Заавал биш) Суугаагүй map-ыг Workshop-оос ачаалах: `agent\.env`-д `WORKSHOP_CACHE=<id>` → `host_workshop_map <id>`.
 
+## Workshop map + AIM 1V1 (agent v1.3.0)
+
+Агент хавтсанд эдгээр 3 файл **хамт** байна: `berx-agent.js`, `arena-modes.js`, `workshop-maps.json`
+(`agent\.env`, `agent\.env.skins`-д хүрэхгүй). Шинэ тохиргоо шаардахгүй — `CS2_DIR` аль хэдийн тохируулсан байх ёстой
+(Workshop татагдсан эсэхийг `...\steamapps\workshop\content\730\<id>`-ээс шалгана).
+
+* **AIM / 1V1** табаас admin: map (aim_map), 1v1/2v2, AK-47/M4A4/M4A1-S/AWP, First to 10/13/16 → «AIM эхлүүлэх».
+* Agent: одоогийн convar-уудыг `agent\.berx-arena-state.json`-д хадгална (нууц мэдээлэлгүй) → MatchZy `css_restart` +
+  `matchzy_autostart_mode 0` (унтуулна) → `host_workshop_map <allowlist ID>` → сервер map-аа мэдээлсний дараа AIM тохиргоо
+  (bot kick, team balance off, freezetime 0, `mp_maxrounds 2N-1` + clinch, зэвсэг, `mp_match_end_restart 1`) → буцааж уншиж шалгана.
+* Сайтын төлөв: **Хүсэлт → Татаж байна → Ачаалж байна → Тохируулж байна → Бэлэн** / **Алдаа**. "Бэлэн" нь зөвхөн сервер
+  тухайн map-ыг status-аар мэдээлж, тохиргоо батлагдсаны дараа гарна. Татах 15 мин, ачаалах 3 мин-ээс хэтэрвэл Алдаа.
+* **Дахин тоглох** — тохиргоог (хэмжээ/зэвсэг/round) дахин хэрэгжүүлж `mp_restartgame 1`. Тоглолт дуусахад ижил map дээр дахин эхэлнэ.
+* **AIM дуусгах** (эсвэл Competitive map «Серверт тавих», горим солих) — хадгалсан convar-ууд + MatchZy-ийн анхны
+  `matchzy_autostart_mode` (`cfg\MatchZy\config.cfg`-оос уншина) сэргээгдээд competitive map руу шилжинэ.
+* AIM үед MatchZy-г сэрээх командууд (баг түгжих, match start/stop, knife, bot нэмэх) сайт болон agent дээр хоёуланд нь хориотой.
+* Skin Inventory: WeaponPaints / MariaDB-д хүрэхгүй. Сонгосон skin, хутга, бээлий, agent Workshop map дээр ч ажиллана
+  (зэвсэг бүрийн skin T/CT loadout-аас — жишээ нь T багт M4 өгвөл таны T loadout-ийн M4 skin).
+
+**Шинэ Workshop map нэмэх:** `agent/workshop-maps.json`-д нэг мөр (`id`, `category: aim|competitive`, `workshopId`,
+`mapName` = map-ын дотоод нэр, `image` = Steam Workshop-ын жинхэнэ screenshot URL) → push/deploy → серверийн agent хавтсанд
+шинэ `workshop-maps.json`-ыг хуулж agent-ийг дахин асаана. Сайт ба agent хоёулаа энэ allowlist-ээр шалгадаг.
+
 ## Алдаа засах
 * **"SERVER_AGENT_SECRET Vercel дээрхтэй таарахгүй"**: хоёр газар ижил эсэхийг шалгаад Vercel-ээ Redeploy хий.
 * **"RCON холбогдсонгүй"**: сервер `-usercon`-той асаагүй, эсвэл `rcon_password` agent/.env-тэй таарахгүй байна.

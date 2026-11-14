@@ -3,9 +3,16 @@
   'use strict';
   const U = window.BerxUI, A = window.BerxAPI, S = window.BerxStore;
   const { icon, esc, Avatar, CardHead } = U;
-  const ui = () => (window.BerxApp.ui.server ||= { data: null, loading: false, error: null, busy: {}, form: {} });
+  const ui = () => (window.BerxApp.ui.server ||= { data: null, loading: false, error: null, busy: {}, form: {}, tab: null, aim: { size: 1, weapon: 'ak47', rounds: 10 }, aimTouched: false });
   const PHASE = { warmup: ['Warmup', 'warn'], live: ['LIVE', 'win'], finished: ['Finished', ''], practice: ['Practice', 'accent'], unknown: ['—', ''] };
   const MODE = { competitive: 'Competitive 5v5', wingman: 'Wingman 2v2', '1v1': '1v1', practice: 'Practice' };
+  const WS_PHASE = { requested: ['Хүсэлт илгээгдлээ', 'warn', 0], downloading: ['Workshop-оос татаж байна', 'warn', 1], loading: ['Map ачаалж байна', 'warn', 2],
+    configuring: ['AIM тохиргоо хэрэгжүүлж байна', 'warn', 3], ready: ['Бэлэн', 'win', 4], error: ['Алдаа', 'loss', -1] };
+  const WEAPON_LABELS = { ak47: 'AK-47', m4a4: 'M4A4', m4a1s: 'M4A1-S', awp: 'AWP' };
+  const wsList = (d) => (d && d.catalog && d.catalog.workshop) || [];
+  // Серверийн map нэр workshop catalog-ийн аль map вэ ("aim_map", "workshop/3469339086/aim_map")
+  const wsOf = (d, name) => { if (!name) return null; const n = String(name).toLowerCase().replace(/\\/g, '/'); return wsList(d).find(m => n === m.mapName || n.endsWith('/' + m.mapName) || n.includes('/' + m.workshopId + '/')) || null; };
+  const aimLabel = (a) => a ? `AIM ${a.size}v${a.size} · ${WEAPON_LABELS[a.weapon] || a.weapon} · First to ${a.rounds}` : '';
 
   async function fetchState() {
     const u = ui();
@@ -41,7 +48,9 @@
     if (d.demo) return `<div class="card srv-offline"><div class="srv-dot off"></div><div><div class="display" style="font-size:24px">NOT CONFIGURED</div><div class="muted">Энэ бол preview (demo). Бодит сервер зөвхөн Vercel дээрх сайтад холбогдоно.</div></div></div>`;
     if (!d.configured) return `<div class="card srv-offline"><div class="srv-dot off"></div><div><div class="display" style="font-size:24px">NOT CONFIGURED</div><div class="muted">Сервер холбогдоогүй байна. ${me && me.admin ? 'Vercel дээр <code>SERVER_AGENT_SECRET</code> тохируулаад таны компьютер дээр BERX Agent-ийг асаана (agent/README.md).' : 'Admin серверийг тохируулахыг хүлээнэ үү.'}</div></div></div>`;
     if (!d.online) return `<div class="card srv-offline"><div class="srv-dot off"></div><div><div class="display" style="font-size:24px">OFFLINE</div><div class="muted">${d.lastSeen ? 'Сүүлд ' + U.timeAgo(d.lastSeen) + ' холбогдсон.' : 'Agent хараахан холбогдоогүй байна.'} Сервер эсвэл BERX Agent асаалттай эсэхийг шалгана уу.</div></div></div>`;
-    const mp = s.map ? A.mapInfo(mapIdOf(s.map)) : null;
+    const ws = wsOf(d, s.map);
+    const mp = ws ? { name: ws.name, img: ws.image } : s.map ? A.mapInfo(mapIdOf(s.map)) : null;
+    const aim = d.arena && d.arena.aim;
     const [ph, phCls] = PHASE[s.phase] || PHASE.unknown;
     return `<div class="card srv-status" style="${mp && mp.img ? `--img:url(${mp.img})` : ''}">
       <div class="srv-status-bg"></div>
@@ -53,7 +62,7 @@
       <div class="srv-grid">
         <div><div class="kpi-label">Map</div><div class="big-num" style="font-size:28px">${esc(mp ? mp.name : (s.map || '—'))}</div></div>
         <div><div class="kpi-label">Тоглогч</div><div class="big-num" style="font-size:28px">${s.playerCount ?? '—'}<span class="dim" style="font-size:18px">${s.maxPlayers ? ' / ' + s.maxPlayers : ''}</span></div>${s.bots ? `<div class="dim" style="font-size:11.5px">+${s.bots} bot</div>` : ''}</div>
-        <div><div class="kpi-label">Горим</div><div style="font-weight:800;font-size:16px;margin-top:6px">${esc(MODE[s.mode] || s.mode || '—')}</div></div>
+        <div><div class="kpi-label">Горим</div><div style="font-weight:800;font-size:16px;margin-top:6px">${aim ? `<span class="accent">${esc(aimLabel(aim))}</span>` : esc(MODE[s.mode] || s.mode || '—')}</div>${ws ? '<div class="dim" style="font-size:11.5px">Steam Workshop map</div>' : ''}</div>
         <div class="srv-score">${s.score ? `<span class="ct">CT</span><b class="ct">${s.score.ct}</b><span class="dim">:</span><b class="t">${s.score.t}</b><span class="t">T</span>` : '<span class="dim">Оноо —</span>'}</div>
       </div>
       ${d.connect ? `<div class="row wrap mt" style="gap:10px">
@@ -64,13 +73,95 @@
     </div>`;
   }
 
+  /* ---------- Workshop ачаалалтын явц (сервер өөрөө батлахаас өмнө "Бэлэн" гэж хэзээ ч харуулахгүй) ---------- */
+  function workshopBanner(d) {
+    const w = d.arena && d.arena.workshop; if (!w || w.phase === 'idle') return '';
+    const m = wsList(d).find(x => x.id === w.id) || { name: w.id };
+    const [label, cls, step] = WS_PHASE[w.phase] || ['—', '', 0];
+    if (w.phase === 'ready' && !w.warning) return '';
+    const steps = ['Татах', 'Ачаалах', 'Тохируулах', 'Бэлэн'];
+    return `<div class="card mt ws-banner ${w.phase}">
+      <div class="row" style="gap:12px;align-items:center">
+        ${w.phase === 'error' ? '<span class="ws-ic loss">✖</span>' : w.phase === 'ready' ? '<span class="ws-ic win">✓</span>' : '<span class="ws-spin" aria-hidden="true"></span>'}
+        <div style="min-width:0;flex:1"><b>${esc(m.name)}</b> <span class="chip ${cls}" style="height:20px;font-size:10.5px">${esc(label)}</span>
+          <div class="dim" style="font-size:12px">Workshop ${esc(w.workshopId || '')}${w.since ? ' · ' + U.timeAgo(w.since) + ' эхэлсэн' : ''}${!d.online && w.phase !== 'error' ? ' · сервер map ачаалж байх үед түр хариу өгөхгүй байж болно' : ''}</div></div>
+      </div>
+      ${w.phase === 'error' ? `<div class="loss mt" style="font-size:12.5px">${esc(w.error || 'Тодорхойгүй алдаа')}</div>`
+        : `<div class="ws-steps mt">${steps.map((t, i) => `<div class="ws-step ${step > i + 1 || (step === 4 && i === 3) ? 'done' : step === i + 1 || (step === 0 && i === 0) ? 'cur' : ''}"><i></i><span>${t}</span></div>`).join('')}</div>`}
+      ${w.warning ? `<div class="note warn mt" style="font-size:12px">⚠️ ${esc(w.warning)}</div>` : ''}
+    </div>`;
+  }
+
+  function mapsCard(d) {
+    const u = ui(), aim = d.arena && d.arena.aim;
+    const tab = u.tab || (aim ? 'aim' : 'competitive');
+    const aimCount = wsList(d).filter(m => m.category === 'aim').length;
+    return `<div class="card">
+      <div class="srv-tabs" role="tablist">
+        <button role="tab" class="${tab === 'competitive' ? 'on' : ''}" aria-selected="${tab === 'competitive'}" data-action="srv-tab" data-tab="competitive">COMPETITIVE <span class="dim">${(d.maps || A.LAN_MAPS).length}</span></button>
+        <button role="tab" class="${tab === 'aim' ? 'on' : ''}" aria-selected="${tab === 'aim'}" data-action="srv-tab" data-tab="aim">AIM / 1V1 <span class="dim">${aimCount}</span>${aim ? '<i class="srv-tab-live">●</i>' : ''}</button>
+      </div>
+      ${tab === 'aim' ? aimSection(d) : mapVote(d)}
+    </div>`;
+  }
+
+  function aimSection(d) {
+    const me = A.me(), admin = me && me.admin, online = d.online, ar = d.arena || null, aim = ar && ar.aim;
+    const list = wsList(d).filter(m => m.category === 'aim');
+    if (!list.length) return '<div class="dim" style="padding:14px 2px">AIM map тохируулаагүй байна.</div>';
+    const agentOld = d.online && !ar;      // v1.3.0-аас өмнөх agent Workshop/AIM мэдээлэл илгээдэггүй
+    const f = ui().aim;
+    if (aim && !ui().aimTouched) { f.size = aim.size; f.weapon = aim.weapon; f.rounds = aim.rounds; }
+    const seg = (k, vals, lbl) => `<div class="seg sm">${vals.map(v => `<button class="${String(f[k]) === String(v) ? 'on' : ''}" data-action="aim-set" data-k="${k}" data-v="${v}">${esc(lbl(v))}</button>`).join('')}</div>`;
+    const w = ar && ar.workshop;
+    return `
+      ${aim ? `<div class="aim-live">
+        <div><div class="kpi-label">Идэвхтэй</div><div class="display" style="font-size:20px">${esc(aimLabel(aim))}</div>
+          <div class="dim" style="font-size:12px">${esc((list.find(m => m.id === aim.map) || { name: aim.map }).name)}${w ? ' · ' + esc((WS_PHASE[w.phase] || [''])[0]) : ''}</div></div>
+      </div>` : ''}
+      <div class="ws-maps">${list.map(m => {
+        const inst = ar && ar.installed ? ar.installed[m.id] : null, cur = aim && aim.map === m.id;
+        const known = !ar || (ar.agentCatalog || []).includes(m.id);
+        return `<div class="ws-map ${cur ? 'current' : ''}">
+          <div class="ws-pic" style="${m.image ? `--img:url('${esc(m.image)}')` : ''}" role="img" aria-label="${esc(m.name)} screenshot (Steam Workshop)">
+            <span class="ws-badge">WORKSHOP</span>${cur ? '<span class="srv-now">● ОДОО</span>' : ''}
+            <span class="nm">${esc(m.name)}</span>
+          </div>
+          <div class="ws-meta">
+            <div class="dim" style="font-size:12px">${m.author ? 'by ' + esc(m.author) + ' · ' : ''}${m.sizeMB ? m.sizeMB + ' MB · ' : ''}${m.teamSizes.map(n => n + 'v' + n).join(' / ')}</div>
+            <div class="row wrap" style="gap:6px;margin-top:6px">
+              ${inst === true ? '<span class="chip win" style="height:20px;font-size:10.5px">Серверт татагдсан</span>' : inst === false ? '<span class="chip warn" style="height:20px;font-size:10.5px">Анх ачаалахад татна</span>' : ''}
+              ${!known ? '<span class="chip loss" style="height:20px;font-size:10.5px" title="agent\\workshop-maps.json-оо шинэчилнэ үү">Agent-д алга</span>' : ''}
+              <a class="chip" style="height:20px;font-size:10.5px" href="${esc(m.source)}" target="_blank" rel="noopener noreferrer">Steam ${icon('ext')}</a>
+            </div>
+          </div>
+        </div>`;
+      }).join('')}</div>
+      ${admin ? `<div class="aim-form">
+        ${agentOld ? '<div class="note warn mb">⚠️ Серверийн BERX Agent хуучин байна — Workshop/AIM-д agent v1.3.0 хэрэгтэй (README).</div>' : ''}
+        <div class="adm-row"><span>Багийн хэмжээ</span>${seg('size', (d.catalog && d.catalog.sizes) || [1, 2], v => v + 'v' + v)}</div>
+        <div class="adm-row"><span>Зэвсэг</span>${seg('weapon', Object.keys((d.catalog && d.catalog.weapons) || WEAPON_LABELS), v => WEAPON_LABELS[v] || v)}</div>
+        <div class="adm-row"><span>Round</span>${seg('rounds', (d.catalog && d.catalog.rounds) || [10, 13, 16], v => 'First to ' + v)}</div>
+        <div class="dim" style="font-size:11.5px;margin:4px 0 10px">Bot kick · team balance OFF · freezetime 0 · тоглолт дуусахад ижил map дээр дахин эхэлнэ. MatchZy AIM-ийн үед унтаж, Competitive руу буцахад өмнөх тохиргоо сэргээгдэнэ.</div>
+        <div class="row wrap" style="gap:8px">
+          ${aim ? `<button class="btn primary" data-action="aim-rematch" ${online && w && ['ready', 'configuring'].includes(w.phase) ? '' : 'disabled'}>↻ Дахин тоглох / тохиргоо хэрэгжүүлэх</button>`
+            : `<button class="btn primary" data-action="aim-start" data-map="${esc(list[0].id)}" ${online && !agentOld ? '' : 'disabled'}>▶ AIM эхлүүлэх · ${esc(list[0].name)}</button>`}
+          ${aim && w && w.phase === 'error' ? `<button class="btn" data-action="aim-start" data-map="${esc(aim.map)}" ${online ? '' : 'disabled'}>Map-ыг дахин ачаалах</button>` : ''}
+        </div>
+        ${aim ? `<div class="aim-back"><span>Competitive руу буцах:</span>
+          <select class="input" id="aim-back-map" aria-label="Буцах map" style="height:36px;width:auto">${(d.maps || A.LAN_MAPS).map(id => `<option value="${id}">${esc(A.mapInfo(id).name)}</option>`).join('')}</select>
+          <button class="btn danger" data-action="aim-stop" ${online ? '' : 'disabled'}>■ AIM дуусгах</button></div>` : ''}
+      </div>` : `<div class="dim" style="font-size:12.5px;margin-top:10px">${aim ? 'AIM тоглолт явагдаж байна — серверт холбогдоод тоглоорой.' : 'AIM горимыг admin эхлүүлнэ.'}</div>`}`;
+  }
+
   function mapVote(d) {
     const me = A.me(), online = d.online;
     const total = Object.values(d.votes || {}).reduce((a, b) => a + b, 0);
     const cur = d.server && d.server.map ? mapIdOf(d.server.map) : null;
     const avail = (d.server && d.server.mapsAvailable) || {};
-    return `<div class="card">
-      ${CardHead('map', 'Map сонгох', `<span class="muted" style="font-size:12px">${total} санал</span>`)}
+    const aim = d.arena && d.arena.aim;
+    return `
+      <div class="row between" style="margin:2px 0 10px"><span class="muted" style="font-size:12px">Map-д санал өгөх${aim ? ' · <span class="accent">AIM идэвхтэй — «Серверт тавих» нь AIM-ийг дуусгаж өмнөх тохиргоог сэргээнэ</span>' : ''}</span><span class="muted" style="font-size:12px">${total} санал</span></div>
       <div class="srv-maps">${(d.maps || A.LAN_MAPS).map(id => {
         const m = A.mapInfo(id), n = (d.votes || {})[id] || 0, mine = d.myVote === id, pct = total ? Math.round(n / total * 100) : 0;
         const missing = avail[id] === false;   // agent шалгаад серверт олдоогүй
@@ -81,8 +172,7 @@
           <div class="row between" style="font-size:12px;margin-top:4px"><span class="${mine ? 'accent' : 'muted'}">${mine ? '✓ Таны санал' : 'Санал өгөх'}</span><b>${n}</b></div>
           ${me && me.admin ? `<button class="btn sm outline block" style="margin-top:6px" data-action="srv-cmd" data-type="changemap" data-arg-map="${id}" ${online && !missing ? '' : 'disabled'} ${missing ? 'title="Серверт суугаагүй"' : ''}>Серверт тавих</button>` : ''}
         </div>`;
-      }).join('')}</div>
-    </div>`;
+      }).join('')}</div>`;
   }
 
   function teamCol(d, team) {
@@ -112,7 +202,8 @@
     const mySpec = spec.some(p => p.userId === me.id);
     const pendingApply = d.teamsVersion && d.appliedTeamsVersion !== d.teamsVersion;
     return `<div class="card">
-      ${CardHead('crew', 'Баг сонгох', me.admin ? `<button class="btn sm" data-action="srv-shuffle">${icon('shuffle')} Санамсаргүй хуваах</button><button class="btn sm primary" data-action="srv-cmd" data-type="apply_teams" ${d.online ? '' : 'disabled'} title="MatchZy-аар SteamID64-ээр түгжинэ">${icon('send')} Серверт хэрэгжүүлэх</button>` : '')}
+      ${CardHead('crew', 'Баг сонгох', me.admin ? `<button class="btn sm" data-action="srv-shuffle">${icon('shuffle')} Санамсаргүй хуваах</button><button class="btn sm primary" data-action="srv-cmd" data-type="apply_teams" ${d.online && !(d.arena && d.arena.aim) ? '' : 'disabled'} title="MatchZy-аар SteamID64-ээр түгжинэ">${icon('send')} Серверт хэрэгжүүлэх</button>` : '')}
+      ${d.arena && d.arena.aim ? `<div class="note mb">🎯 AIM ${d.arena.aim.size}v${d.arena.aim.size}: баг бүрт ${d.arena.aim.size} хүн. Сервер дээр багаа тоглоом дотроо сонгоно (MatchZy түгжээ AIM-д ашиглагдахгүй).</div>` : ''}
       ${!me.steamId ? '<div class="note warn mb">⚠️ CT/T багт нэгдэхийн тулд Steam ID холбох шаардлагатай (Тохиргоо → Профайл). Сервер таныг SteamID64-ээр таньж багт оруулна.</div>' : ''}
       <div class="teams-grid">${teamCol(d, 'CT')}<div class="vs display">VS</div>${teamCol(d, 'T')}</div>
       <div class="spec-row">
@@ -181,7 +272,8 @@
       ${u.error ? `<div class="note warn mb">⚠️ ${esc(u.error)}${/does not exist|PGRST205|schema cache/.test(u.error) ? ' — Supabase дээр supabase/003_server.sql ажиллуулна уу.' : ''}</div>` : ''}
       ${!d ? '<div class="card empty-state"><div class="e">⏳</div>Серверийн төлөв ачаалж байна...</div>' : `
       ${statusCard(d)}
-      <div class="grid mt cols" style="--c:1fr 1.15fr">${mapVote(d)}${teamsCard(d)}</div>
+      ${workshopBanner(d)}
+      <div class="grid mt cols" style="--c:1fr 1.15fr">${mapsCard(d)}${teamsCard(d)}</div>
       ${d.online && d.server && d.server.players && d.server.players.length ? `<div class="card mt">${CardHead('users', 'Серверт байгаа тоглогчид')}<div class="row wrap" style="gap:8px">${d.server.players.map(p => `<span class="chip ${p.team === 'CT' ? 'ct-chip' : p.team === 'T' ? 't-chip' : ''}">${p.bot ? '🤖 ' : ''}${esc(p.name)}${p.ping !== null && p.ping !== undefined && !p.bot ? ` · ${p.ping}ms` : ''}</span>`).join('')}</div></div>` : ''}
       ${me && me.admin ? `<div class="mt">${adminPanel(d)}</div>` : ''}`}`;
   }
@@ -203,6 +295,18 @@
       if (v === '' || v === undefined) return window.BerxApp.toast('Утга оруулна уу', '⚠️');
       cmd(type, { value: v }, (ui().data.commandTypes || {})[type]);
     },
+    'srv-tab'(el) { ui().tab = el.dataset.tab === 'aim' ? 'aim' : 'competitive'; return true; },
+    'aim-set'(el) { const f = ui().aim, k = el.dataset.k; if (!['size', 'weapon', 'rounds'].includes(k)) return; f[k] = k === 'weapon' ? el.dataset.v : Number(el.dataset.v); ui().aimTouched = true; return true; },
+    'aim-start'(el) {
+      const f = ui().aim, map = el.dataset.map, m = wsList(ui().data).find(x => x.id === map) || { name: map };
+      window.BerxApp.confirm(`${m.name} дээр AIM ${f.size}v${f.size} (${WEAPON_LABELS[f.weapon]}, First to ${f.rounds}) эхлүүлэх үү? Одоогийн тоглолт зогсож, сервер Workshop map ачаална. Одоогийн серверийн тохиргоо хадгалагдаж, Competitive руу буцахад сэргээгдэнэ.`,
+        () => { ui().aimTouched = false; cmd('aim_start', { map, size: f.size, weapon: f.weapon, rounds: f.rounds }, 'AIM 1V1 эхлүүлэх'); });
+    },
+    'aim-rematch'() { const f = ui().aim; ui().aimTouched = false; cmd('aim_rematch', { size: f.size, weapon: f.weapon, rounds: f.rounds }, 'AIM дахин тоглох'); },
+    'aim-stop'() {
+      const map = document.getElementById('aim-back-map')?.value || 'mirage';
+      window.BerxApp.confirm(`AIM-ийг дуусгаж, өмнөх серверийн тохиргоог сэргээн ${A.mapInfo(map).name} (Competitive) руу шилжих үү?`, () => { ui().tab = 'competitive'; cmd('aim_stop', { map }, 'Competitive руу буцах'); });
+    },
     'srv-kick'(el) { window.BerxApp.confirm(`${el.dataset.name}-г серверээс kick хийх үү?`, () => cmd('kick', { steamId: el.dataset.steam }, 'Kick')); },
     'srv-copy'(el) { (navigator.clipboard?.writeText(el.dataset.text) || Promise.reject()).then(() => window.BerxApp.toast('Connect команд хуулагдлаа — CS2 console-д paste хийнэ (~ товч)', '📋')).catch(() => window.BerxApp.toast('Хуулах боломжгүй', '⚠️')); }
   };
@@ -210,13 +314,13 @@
   let timer = null;
   const onPing = () => fetchState();
   function mount(root) {
-    clearInterval(timer);
-    timer = setInterval(() => { if (!document.hidden && window.BerxApp.route === 'server') fetchState(); }, 6000);
+    // app.js нь render бүрт mount-ыг дууддаг — timer-ийг дахин эхлүүлбэл (6с-ээс олон render) polling хэзээ ч ажиллахгүй
+    if (!timer) timer = setInterval(() => { if (!document.hidden && window.BerxApp.route === 'server') fetchState(); }, 6000);
     document.removeEventListener('berx:server', onPing); document.addEventListener('berx:server', onPing);
     root.querySelectorAll('[data-srv-form]').forEach(el => el.addEventListener('input', () => { ui().form[el.dataset.srvForm] = el.value; }));
     root.querySelectorAll('[data-srv-move]').forEach(el => el.addEventListener('change', () => act('server.move', { userId: el.dataset.srvMove, team: el.value }, 'Баг солигдлоо')));
   }
-  function unmount() { clearInterval(timer); document.removeEventListener('berx:server', onPing); ui().data = null; }
+  function unmount() { clearInterval(timer); timer = null; document.removeEventListener('berx:server', onPing); ui().data = null; }
 
   window.BerxPages.server = { render, mount, unmount, actions, fetchState };
 })();
