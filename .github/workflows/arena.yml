@@ -1,0 +1,26 @@
+name: BERX ARENA server + Workshop/AIM
+on:
+  push:
+    branches: ['workshop-aim', 'main']
+    paths: ['lib/**', 'agent/**', 'server/**', 'js/**', 'css/**', 'tests/server/**', 'tests/skins/fake-supabase.js', '.github/workflows/arena.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  arena:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Syntax check
+        run: for f in agent/berx-agent.js agent/arena-modes.js agent/skins-sync.js lib/*.js js/pages/*.js js/services/*.js js/app.js tests/server/fake-cs2.js; do node --check "$f" || exit 1; done
+      - name: Catalog JSON valid
+        run: node -e "const a=require('./agent/arena-modes'); const c=a.loadCatalog(); console.log(c.map(m=>m.id+'='+m.workshopId).join(', '))"
+      - name: Workshop/AIM unit tests
+        run: node tests/server/arena-unit.mjs
+      - name: SERVER API regression + Workshop/AIM end-to-end (site + agent + fake CS2)
+        run: node tests/server/arena.mjs
+      - name: Skin Inventory unit tests (agent v1.3.0)
+        run: node tests/skins/unit.mjs

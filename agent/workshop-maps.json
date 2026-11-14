@@ -1,0 +1,25 @@
+{
+  "_comment": "BERX ARENA Workshop map catalog. Шинэ map нэмэх: доор нэг мөр нэмээд (mapNames = серверийн status-д гарах БОДИТ map нэр, эхнийх нь үндсэн), сайтаа deploy хийж, энэ файлыг серверийн agent хавтас руу хуулна (agent-ийг дахин асаана). Сайт ба agent хоёулаа энэ жагсаалтаар шалгана.",
+  "version": 1,
+  "maps": [
+    {
+      "id": "aim_map",
+      "name": "aim_map",
+      "category": "aim",
+      "workshopId": "3469339086",
+      "mapNames": [
+        "aim_map_d",
+        "aim_map"
+      ],
+      "author": "Bimmerr",
+      "sizeMB": 40.2,
+      "teamSizes": [
+        1,
+        2
+      ],
+      "image": "https://images.steamusercontent.com/ugc/32197118127799742/9C5F223B6582031534FEDD7DA93274BEEE393844/",
+      "source": "https://steamcommunity.com/sharedfiles/filedetails/?id=3469339086",
+      "verified": "2026-11-15: Steam Workshop — Counter-Strike 2 (app 730), CS:GO aim_map-ийн CS2 port (Bimmerr), 1v1/2v2/3v3, 40.175 MB. Бодит CS2 сервер дээр runtime map нэр: aim_map_d"
+    }
+  ]
+}

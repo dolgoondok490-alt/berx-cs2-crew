@@ -1,7 +1,7 @@
 {
   "name": "berx-agent",
   "private": true,
-  "version": "1.2.0",
+  "version": "1.3.1",
   "description": "BERX ARENA agent (CS2 server bridge). Core agent has no dependencies; mysql2 is only needed for the optional SKIN INVENTORY sync.",
   "main": "berx-agent.js",
   "scripts": {

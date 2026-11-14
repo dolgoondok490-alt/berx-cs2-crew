@@ -10,7 +10,7 @@ http.createServer(async (req, res) => {
   if (u.pathname.includes('/realtime/')) { res.writeHead(202); return res.end(); }
   rows[t] ||= [];
   const match = (x) => { for (const [k, v] of u.searchParams) { const m = v.match(/^eq\.(.*)$/); if (m && String(x[k]) !== decodeURIComponent(m[1])) return false; const i = v.match(/^in\.\((.*)\)$/); if (i && !i[1].split(',').map(s => s.replace(/^"|"$/g, '')).includes(String(x[k]))) return false; } return true; };
-  if (req.method === 'GET') { let r = rows[t].filter(match); const lim = u.searchParams.get('limit'); if (lim) r = r.slice(0, +lim); res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(r)); }
+  if (req.method === 'GET') { let r = rows[t].filter(match); const ord = u.searchParams.get('order'); if (ord) { const [col, dir] = ord.split('.'); r = r.slice().sort((a, b) => (a[col] > b[col] ? 1 : a[col] < b[col] ? -1 : 0) * (dir === 'desc' ? -1 : 1)); } const lim = u.searchParams.get('limit'); if (lim) r = r.slice(0, +lim); res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(r)); }
   if (req.method === 'POST') { const row = JSON.parse(b); const oc = u.searchParams.get('on_conflict'); if (oc) { const ks = oc.split(','); const i = rows[t].findIndex(x => ks.every(k => String(x[k]) === String(row[k]))); if (i >= 0) rows[t][i] = { ...rows[t][i], ...row }; else rows[t].push(row); } else rows[t].push(row); res.writeHead(201); return res.end(); }
   if (req.method === 'PATCH') { const p = JSON.parse(b); rows[t] = rows[t].map(x => match(x) ? { ...x, ...p } : x); res.writeHead(204); return res.end(); }
   if (req.method === 'DELETE') { rows[t] = rows[t].filter(x => !match(x)); res.writeHead(204); return res.end(); }

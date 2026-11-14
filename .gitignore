@@ -13,3 +13,4 @@ launcher/shots/
 agent/.env.skins
 agent/node_modules/
 skins/windows/secrets/
+agent/.berx-arena-state.json
