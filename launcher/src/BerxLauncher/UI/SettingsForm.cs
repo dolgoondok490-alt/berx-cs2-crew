@@ -97,6 +97,9 @@ namespace BerxLauncher.UI
             UpdateEnvInfo();
         }
 
+        protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); DarkTitle.Apply(Handle); }
+        protected override void OnShown(EventArgs e) { base.OnShown(e); tServer.SelectionLength = 0; ActiveControl = null; }
+
         void LoadFrom(LauncherSettings s)
         {
             tServer.Text = s.ServerExe; tArgs.Text = s.ServerArgs; tAgent.Text = s.AgentDir; tNode.Text = s.NodePath;

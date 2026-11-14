@@ -131,6 +131,8 @@ namespace BerxLauncher.UI
             LayoutUi();
         }
 
+        protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); DarkTitle.Apply(Handle); }
+
         // ------------------------------------------------------------ layout
         protected override void OnResize(EventArgs e)
         {
@@ -186,8 +188,13 @@ namespace BerxLauncher.UI
             var g = e.Graphics; Theme.Hq(g);
             g.Clear(Theme.Bg);
             // header glow
-            using (var b = new LinearGradientBrush(new Rectangle(0, 0, ClientSize.Width, Dpi.P(92)), Theme.A(Theme.Accent, 22), Theme.A(Theme.Accent, 0), 0f))
-                g.FillRectangle(b, 0, 0, ClientSize.Width / 2, Dpi.P(92));
+            using (var gp = new GraphicsPath())
+            {
+                var er = new Rectangle(-Dpi.P(160), -Dpi.P(150), Dpi.P(760), Dpi.P(300));
+                gp.AddEllipse(er);
+                using (var pb = new PathGradientBrush(gp) { CenterColor = Theme.A(Theme.Accent, 34), SurroundColors = new[] { Theme.A(Theme.Accent, 0) } })
+                    g.FillEllipse(pb, er);
+            }
             int m = Dpi.P(24);
             logoBmp ??= Theme.AppBitmap(Dpi.P(46));
             g.DrawImage(logoBmp, m, Dpi.P(24), Dpi.P(46), Dpi.P(46));
@@ -196,7 +203,7 @@ namespace BerxLauncher.UI
             var big = Theme.Display(26f);
             var w1 = TextRenderer.MeasureText("BERX", big, Size.Empty, TextFormatFlags.NoPadding).Width;
             Theme.Draw(g, "BERX", big, Theme.Text, new Rectangle(tx - Dpi.P(2), Dpi.P(34), w1 + Dpi.P(6), Dpi.P(44)), TextFormatFlags.Left);
-            Theme.Draw(g, "ARENA", big, Theme.Accent, new Rectangle(tx + w1 + Dpi.P(8), Dpi.P(34), Dpi.P(200), Dpi.P(44)), TextFormatFlags.Left);
+            Theme.Draw(g, "ARENA", big, Theme.Accent, new Rectangle(tx + w1 - Dpi.P(6), Dpi.P(34), Dpi.P(200), Dpi.P(44)), TextFormatFlags.Left);
             // connect label inside server card is drawn by card paint hook below
         }
 
@@ -253,6 +260,13 @@ namespace BerxLauncher.UI
             if (orch.Busy && progressText != null && btnStart.Busy) btnStart.Sub = progressText;
         }
 
+        static string MapName(string m)
+        {
+            var n = System.Text.RegularExpressions.Regex.Replace(m, "^(de|cs|ar|aim|workshop)_", "");
+            if (n == "dust2") return "Dust II";
+            return n.Length > 0 ? char.ToUpperInvariant(n[0]) + n.Substring(1) : m;
+        }
+
         static string Fmt(TimeSpan t) => t.TotalHours >= 1 ? $"{(int)t.TotalHours}:{t.Minutes:00}:{t.Seconds:00}" : $"{t.Minutes:00}:{t.Seconds:00}";
 
         void ApplySnapshot(StatusSnapshot s)
@@ -260,12 +274,12 @@ namespace BerxLauncher.UI
             last = s;
             string St(CompState c, string run, string stop) => c switch { CompState.Running => run, CompState.Error => "Error", CompState.Starting => "Starting…", _ => stop };
             cWg.Set(s.WireGuard, St(s.WireGuard, "Active", "Inactive"), s.WireGuardDetail);
-            cServer.Set(s.Server, St(s.Server, "Running", "Stopped"), s.ServerDetail);
+            cServer.Set(s.Server, St(s.Server, "Running", "Stopped"), "Dedicated · " + s.ServerDetail);
             cAgent.Set(s.Agent, St(s.Agent, "Running", "Stopped"), s.AgentDetail);
             cRcon.Set(s.Rcon, St(s.Rcon, "Connected", "Disconnected"), s.RconDetail);
 
             bool srv = s.Server == CompState.Running;
-            mMap.Set(srv && !string.IsNullOrEmpty(s.Map) ? s.Map : "—");
+            mMap.Set(srv && !string.IsNullOrEmpty(s.Map) ? MapName(s.Map) : "—", srv && !string.IsNullOrEmpty(s.Map) ? s.Map : null);
             if (srv && s.Players.HasValue)
                 mPlayers.Set(s.MaxPlayers.HasValue ? $"{s.Players} / {s.MaxPlayers}" : s.Players.ToString(), s.Bots > 0 ? $"+{s.Bots} bot" : null);
             else mPlayers.Set("—");
@@ -306,6 +320,7 @@ namespace BerxLauncher.UI
             if (orch.Busy) return;
             banner.Visible = false; LayoutUi();
             btnStart.Busy = true;
+            btnStart.Style = FlatButton.Kind.Primary;
             btnStart.Text = kind == "stop" ? "ЗОГСООЖ БАЙНА…" : kind == "restart" ? "ДАХИН АСААЖ…" : "ЭХЛҮҮЛЖ БАЙНА…";
             btnStart.Sub = "…";
             btnStart.Enabled = true;

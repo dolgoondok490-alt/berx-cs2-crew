@@ -56,7 +56,7 @@ namespace BerxLauncher.UI
 
     class FlatButton : Smooth, IAnimated
     {
-        public enum Kind { Normal, Primary, Danger, Ghost }
+        public enum Kind { Normal, Primary, Danger, Ghost, Success }
         public Kind Style = Kind.Normal;
         public string Glyph;           // Segoe Fluent/MDL2 icon
         public string Sub;
@@ -83,6 +83,7 @@ namespace BerxLauncher.UI
             if (busy) { busyPhase += dt * 60; Invalidate(); }
         }
 
+        protected override void OnTextChanged(EventArgs e) { Invalidate(); base.OnTextChanged(e); }
         protected override void OnMouseEnter(EventArgs e) { hover = true; base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { hover = false; down = false; Invalidate(); base.OnMouseLeave(e); }
         protected override void OnMouseDown(MouseEventArgs e) { if (e.Button == MouseButtons.Left) { down = true; Invalidate(); } base.OnMouseDown(e); }
@@ -101,9 +102,10 @@ namespace BerxLauncher.UI
                 case Kind.Primary: fill = Theme.Lerp(Theme.Accent, Theme.AccentHi, hoverT); border = fill; fore = Color.White; break;
                 case Kind.Danger: fill = Theme.Lerp(Theme.A(Theme.Red, 26), Theme.A(Theme.Red, 60), hoverT); border = Theme.A(Theme.Red, 150); fore = Theme.Lerp(Hex(0xFF8A8C), Color.White, hoverT); break;
                 case Kind.Ghost: fill = Theme.Lerp(Theme.A(Theme.Panel3, 0), Theme.Panel3, hoverT); border = Theme.Lerp(Theme.Line, Theme.Dim, hoverT); fore = Theme.Text; break;
+                case Kind.Success: fill = Theme.A(Theme.Green, 26); border = Theme.A(Theme.Green, 150); fore = Theme.Green; break;
                 default: fill = Theme.Lerp(Theme.Panel2, Theme.Panel3, hoverT); border = Theme.Lerp(Theme.Line, Theme.A(Theme.Accent, 140), hoverT); fore = Theme.Text; break;
             }
-            if (!Enabled && !busy) { fill = Style == Kind.Primary ? Theme.Lerp(Theme.Accent, Theme.Panel2, 0.72f) : Theme.Lerp(fill, Under, 0.5f); border = Theme.Line; fore = Theme.Dim; }
+            if (!Enabled && !busy && Style != Kind.Success) { fill = Style == Kind.Primary ? Theme.Lerp(Theme.Accent, Theme.Panel2, 0.72f) : Theme.Lerp(fill, Under, 0.5f); border = Theme.Line; fore = Theme.Dim; }
             if (down) fill = Theme.Lerp(fill, Color.Black, 0.15f);
 
             var r = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
@@ -138,7 +140,7 @@ namespace BerxLauncher.UI
             if (gf != null) Theme.Draw(g, Glyph, gf, fore, new Rectangle(x0, cy - textSize.Height / 2, glyphW, textSize.Height), TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
             Theme.Draw(g, Text, font, fore, new Rectangle(x0 + glyphW, cy - textSize.Height / 2, textSize.Width + 2, textSize.Height), TextFormatFlags.VerticalCenter | TextFormatFlags.Left);
             if (subH > 0)
-                Theme.Draw(g, Sub, Theme.Ui(8.5f), Style == Kind.Primary && Enabled ? Theme.A(Color.White, 215) : Theme.Muted,
+                Theme.Draw(g, Sub, Theme.Ui(8.5f), Style == Kind.Primary && Enabled ? Theme.A(Color.White, 215) : Style == Kind.Success ? Theme.A(Theme.Green, 200) : Theme.Muted,
                     new Rectangle(Dpi.P(10), cy + textSize.Height / 2 + Dpi.P(2), Width - Dpi.P(20), subH), TextFormatFlags.HorizontalCenter | TextFormatFlags.EndEllipsis);
         }
 
@@ -196,7 +198,10 @@ namespace BerxLauncher.UI
             float pr = State == CompState.Unknown || State == CompState.Stopped ? 0 : (float)(0.5 + 0.5 * Math.Sin(pulse * (State == CompState.Starting ? 7 : 3)));
             using (var halo = new SolidBrush(Theme.A(c, (int)(55 * pr)))) g.FillEllipse(halo, dotX - Dpi.P(9), dotY - Dpi.P(9), Dpi.P(18), Dpi.P(18));
             using (var dot = new SolidBrush(c)) g.FillEllipse(dot, dotX - Dpi.P(5), dotY - Dpi.P(5), Dpi.P(10), Dpi.P(10));
-            Theme.Draw(g, StateText, Theme.Display(13.5f, FontStyle.Bold), State == CompState.Unknown || State == CompState.Stopped ? Theme.Muted : (State == CompState.Running ? Theme.Text : c),
+            var stFont = Theme.Display(13.5f, FontStyle.Bold);
+            int avail = Width - pad * 2 - Dpi.P(18);
+            if (TextRenderer.MeasureText(StateText ?? "", stFont, Size.Empty, TextFormatFlags.NoPadding).Width > avail) stFont = Theme.Display(11f, FontStyle.Bold);
+            Theme.Draw(g, StateText, stFont, State == CompState.Unknown || State == CompState.Stopped ? Theme.Muted : (State == CompState.Running ? Theme.Text : c),
                 new Rectangle(pad + Dpi.P(18), (int)dotY - Dpi.P(13), Width - pad * 2 - Dpi.P(18), Dpi.P(26)), TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
             Theme.Draw(g, Detail, Theme.Ui(8.5f), Theme.Dim, new Rectangle(pad, Height - pad - Dpi.P(16), Width - pad * 2, Dpi.P(17)), TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
             if (!string.IsNullOrEmpty(Detail) && Detail.Length > 28) toolTipText = Detail; else toolTipText = null;
@@ -227,7 +232,9 @@ namespace BerxLauncher.UI
             int pad = Dpi.P(4);
             Theme.Draw(g, Label?.ToUpperInvariant(), Theme.Semi(7.5f), Theme.Dim, new Rectangle(pad, 0, Width - pad, Dpi.P(16)), TextFormatFlags.Left);
             var isDash = Value == "—";
-            Theme.Draw(g, Value, Theme.Display(isDash ? 15f : 16f), isDash ? Theme.Dim : ValueColor, new Rectangle(pad - Dpi.P(1), Dpi.P(16), Width - pad, Dpi.P(30)), TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
+            var vf = Theme.Display(isDash ? 15f : 16f);
+            if (!isDash && TextRenderer.MeasureText(Value ?? "", vf, Size.Empty, TextFormatFlags.NoPadding).Width > Width - pad) vf = Theme.Display(12.5f);
+            Theme.Draw(g, Value, vf, isDash ? Theme.Dim : ValueColor, new Rectangle(pad - Dpi.P(1), Dpi.P(16), Width - pad, Dpi.P(30)), TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
             if (!string.IsNullOrEmpty(Sub))
                 Theme.Draw(g, Sub, Theme.Ui(8f), Theme.Muted, new Rectangle(pad, Dpi.P(46), Width - pad, Dpi.P(16)), TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
         }

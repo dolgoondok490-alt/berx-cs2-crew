@@ -121,4 +121,23 @@ namespace BerxLauncher.UI
     }
 
     interface IAnimated { void Tick(float dt); }
+
+    /// <summary>Windows 10/11 dark title bar (DWM). Хуучин Windows дээр чимээгүй алгасна.</summary>
+    static class DarkTitle
+    {
+        [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+        static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+
+        public static void Apply(IntPtr hwnd)
+        {
+            try
+            {
+                int on = 1;
+                if (DwmSetWindowAttribute(hwnd, 20, ref on, 4) != 0) DwmSetWindowAttribute(hwnd, 19, ref on, 4);
+                int caption = 0x00121010; // COLORREF (BGR) = #101012
+                DwmSetWindowAttribute(hwnd, 35, ref caption, 4);
+            }
+            catch { /* ignore */ }
+        }
+    }
 }
