@@ -684,7 +684,7 @@ input[type=date].input, input[type=time].input { color-scheme: dark; }
 .sk-filters #sk-q { flex: 1 1 200px; min-width: 160px; }
 .sk-filters select { flex: 0 1 180px; }
 .sk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 12px; }
-.sk-card { position: relative; border-radius: 14px; padding: 10px 10px 0; background: linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .01)); border: 1px solid var(--line); cursor: pointer; overflow: hidden; transition: transform .22s var(--ease), border-color .22s, box-shadow .22s; content-visibility: auto; contain-intrinsic-size: 200px 210px; }
+.sk-card { position: relative; border-radius: 14px; padding: 10px 10px 0; background: linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .01)); border: 1px solid var(--line); cursor: pointer; overflow: hidden; transition: transform .22s var(--ease), border-color .22s, box-shadow .22s; }
 .sk-card::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--rc, #888); box-shadow: 0 0 14px var(--rc, #888); }
 .sk-card::before { content: ''; position: absolute; inset: auto 0 0 0; height: 60%; background: radial-gradient(ellipse at 50% 100%, color-mix(in srgb, var(--rc, #888) 22%, transparent), transparent 70%); pointer-events: none; }
 .sk-card:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--rc, #888) 55%, transparent); box-shadow: 0 10px 28px rgba(0, 0, 0, .45); }
