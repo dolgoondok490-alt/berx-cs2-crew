@@ -1,0 +1,93 @@
+name: BERX SKIN INVENTORY
+on:
+  push:
+    branches: ['skins-inventory']
+    paths: ['lib/**', 'agent/**', 'tests/skins/**', 'skins/**', 'assets/data/**', 'js/**', 'server/**', '.github/workflows/skins.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sync-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - db: mariadb:11.4
+            health: healthcheck.sh --connect --innodb_initialized
+          - db: mysql:8.4
+            health: mysqladmin ping -h 127.0.0.1 -proot
+    services:
+      db:
+        image: ${{ matrix.db }}
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MYSQL_ROOT_PASSWORD: root
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="${{ matrix.health }}" --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Install agent optional dependency (mysql2)
+        working-directory: agent
+        run: npm install --no-audit --no-fund
+      - name: Agent sync unit tests (fake driver)
+        run: node tests/skins/unit.mjs
+      - name: End-to-end (site + agent + ${{ matrix.db }})
+        env: { MYSQL_HOST: 127.0.0.1, MYSQL_PORT: 3306, MYSQL_ROOT_PASSWORD: root }
+        run: node tests/skins/e2e.mjs
+
+  windows-scripts:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse all PowerShell scripts
+        shell: pwsh
+        run: |
+          $bad = 0
+          foreach ($f in Get-ChildItem skins/windows/*.ps1) {
+            $tokens = $null; $errs = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$tokens, [ref]$errs) | Out-Null
+            if ($errs) { $bad++; Write-Host "FAIL $($f.Name)"; $errs | ForEach-Object { Write-Host "   $($_.Extent.StartLineNumber): $($_.Message)" } } else { Write-Host "PASS parse $($f.Name)" }
+          }
+          if ($bad) { exit 1 }
+      - name: PSScriptAnalyzer (errors only)
+        shell: pwsh
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          $r = Invoke-ScriptAnalyzer -Path skins/windows -Severity Error
+          $r | Format-Table -AutoSize | Out-String | Write-Host
+          if ($r) { exit 1 } else { Write-Host 'PASS PSScriptAnalyzer: no errors' }
+      - name: 00-check runs safely on a machine without CS2 (read-only)
+        shell: pwsh
+        run: |
+          ./skins/windows/00-check.ps1; Write-Host "exit=$LASTEXITCODE (expected non-zero: nothing installed)"
+          if (Test-Path C:\berx-skins) { Write-Host 'FAIL: check script created files'; exit 1 } else { Write-Host 'PASS 00-check wrote nothing' }
+          $global:LASTEXITCODE = 0
+      - name: 05-install refuses without explicit risk switch
+        shell: pwsh
+        run: |
+          ./skins/windows/05-install-plugin.ps1; if ($LASTEXITCODE -ne 1) { exit 1 }; Write-Host 'PASS install refused without -IUnderstandValveGsltRisk'
+          if (Test-Path C:\berx-skins) { Write-Host 'FAIL: refused install created files'; exit 1 }
+          $global:LASTEXITCODE = 0
+      - name: Staging layout regression — Windows PowerShell 5.1 (real release ZIPs)
+        shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          ./tests/skins/stage-layout.ps1 -WorkRoot "$env:RUNNER_TEMP\stage-ps51"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if (Test-Path C:\berx-skins) { Write-Host 'FAIL: test touched C:\berx-skins'; exit 1 }
+      - name: Staging layout regression — PowerShell 7 (real release ZIPs)
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          ./tests/skins/stage-layout.ps1 -WorkRoot "$env:RUNNER_TEMP\stage-ps7"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if (Test-Path C:\berx-skins) { Write-Host 'FAIL: test touched C:\berx-skins'; exit 1 }
+          if ($env:BERX_WORK_DIR -or $env:BERX_CS2_DIR) { Write-Host 'FAIL: test leaked BERX_* env vars into the session'; exit 1 } else { Write-Host 'PASS env restored' }
