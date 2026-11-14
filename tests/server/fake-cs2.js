@@ -8,7 +8,7 @@
 const net = require('net'), fs = require('fs'), path = require('path'), http = require('http');
 const [port, pass, logFile, ctlPort, cs2Dir, dlMsArg] = process.argv.slice(2);
 const DOWNLOAD_MS = +dlMsArg || 6000;
-const WORKSHOP = { '3469339086': 'aim_map' };
+const WORKSHOP = { '3469339086': 'aim_map_d' };   // бодит CS2 сервер: Workshop aim_map → runtime map нэр aim_map_d
 const steamapps = path.resolve(cs2Dir, '..', '..');
 
 const cv = {
@@ -18,9 +18,11 @@ const cv = {
   mp_buy_anywhere: '0', mp_free_armor: '0', mp_death_drop_gun: '1', mp_death_drop_grenade: '2', mp_death_drop_defuser: '1', mp_give_player_c4: '1',
   mp_ct_default_primary: '', mp_t_default_primary: '', mp_ct_default_secondary: 'weapon_hkp2000', mp_t_default_secondary: 'weapon_glock',
   mp_ct_default_grenades: '', mp_t_default_grenades: '', mp_weapons_allow_map_placed: '0', mp_match_end_restart: '0', mp_match_restart_delay: '15',
-  mp_respawn_on_death_ct: '0', mp_respawn_on_death_t: '0', sv_infinite_ammo: '0', mp_friendlyfire: '0', mp_warmup_pausetimer: '0'
+  mp_respawn_on_death_ct: '0', mp_respawn_on_death_t: '0', sv_infinite_ammo: '0', mp_friendlyfire: '0', mp_warmup_pausetimer: '0',
+  mp_winlimit: '0', mp_equipment_reset_rounds: '0'
 };
 const S = { map: 'de_mirage', autostart: 1, busyUntil: 0, failNext: false, sleepAt: [], configLog: [], restarts: 0,
+  logOn: false, logHttp: [], score: { ct: 0, t: 0 }, played: 0, over: false, noWinlimit: false, lockFreeze: false, gameOvers: 0,
   players: [{ userid: 2, name: 'DOK', steamid64: '76561198000000001', team: 3 }, { userid: 3, name: 'BOT Abe', steamid64: '0', team: 2, bot: true }] };
 const log = (t) => fs.appendFileSync(logFile, `${Date.now()} ${t}\n`);
 
@@ -32,6 +34,24 @@ function loadMap(m) {
     else { cv.mp_warmup_pausetimer = '1'; log('#MATCHZY warmup.cfg'); }
   }, 1000);
 }
+// CS2 HTTP log: logaddress_add_http-ээр бүртгэсэн хаяг руу мөрүүдийг POST хийнэ (log on үед)
+function emit(lines) {
+  if (!S.logOn) return;
+  const ts = new Date().toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' }) + ' - ' + new Date().toTimeString().slice(0, 8) + '.000';
+  const body = lines.map(l => `${ts} - ${l}`).join('\n');
+  for (const u of S.logHttp) fetch(u, { method: 'POST', body }).catch(() => {});
+}
+function playRound(winner) {
+  if (S.over) return;
+  S.played++;
+  if (winner === 'CT' || winner === 'T') S.score[winner === 'CT' ? 'ct' : 't']++;
+  if (winner === 'CT' || winner === 'T') emit([`Team "${winner === 'CT' ? 'CT' : 'TERRORIST'}" triggered "SFUI_Notice_${winner === 'CT' ? 'CTs' : 'Terrorists'}_Win" (CT "${S.score.ct}") (T "${S.score.t}")`]);
+  else emit(['World triggered "SFUI_Notice_Round_Draw"']);
+  const wl = +cv.mp_winlimit, mr = +cv.mp_maxrounds, half = Math.floor(mr / 2);
+  const end = (wl > 0 && (S.score.ct >= wl || S.score.t >= wl)) || S.played >= mr || (+cv.mp_match_can_clinch && (S.score.ct > half || S.score.t > half));
+  if (end) { S.over = true; S.gameOvers++; emit([`Game Over: competitive mg_active ${S.map} score ${S.score.ct}:${S.score.t} after 3 min`]); }
+}
+function restartGame() { S.score = { ct: 0, t: 0 }; S.played = 0; S.over = false; emit(['World triggered "Match_Start" on "' + S.map + '"']); }
 function run(body) {
   log(body);
   const c = body.trim(), w = c.split(/\s+/);
@@ -53,7 +73,14 @@ function run(body) {
   }
   if (w[0] === 'matchzy_autostart_mode') { if (w[1] !== undefined) S.autostart = +w[1]; return ''; }
   if (c === 'css_restart') { S.restarts++; return ''; }
-  if (c === 'mp_restartgame 1') { log('#RESTARTGAME'); return ''; }
+  if (c === 'mp_restartgame 1') { log('#RESTARTGAME'); restartGame(); return ''; }
+  if (c === 'log') return S.logOn ? 'currently logging to: file, console, http' : 'not currently logging';
+  if (c === 'log on') { S.logOn = true; return ''; }
+  if (c === 'log off') { S.logOn = false; return ''; }
+  if (w[0] === 'logaddress_add_http') { const u = c.match(/"([^"]+)"/)[1]; if (!S.logHttp.includes(u)) S.logHttp.push(u); return ''; }
+  if (w[0] === 'logaddress_del_http') { const u = c.match(/"([^"]+)"/)[1]; S.logHttp = S.logHttp.filter(x => x !== u); return ''; }
+  if (w[0] === 'mp_winlimit' && w.length > 1 && S.noWinlimit) return '';          // энэ сервер mp_winlimit-ийг үл тоомсорлоно (fallback тест)
+  if (w[0] === 'mp_freezetime' && w.length > 1 && S.lockFreeze) return '';       // тохиргоо дарагдсаар (алдааны тест)
   if (c === 'bot_kick') { S.players = S.players.filter(p => !p.bot); return ''; }
   if (w[0] === 'wp_refresh') return '[WeaponPaints] Refresh process completed.';
   if (/^\w+$/.test(c) && Object.prototype.hasOwnProperty.call(cv, c)) return `${c} = ${cv[c]}`;
@@ -83,7 +110,12 @@ net.createServer(s => {
 http.createServer((req, res) => {
   const u = new URL(req.url, 'http://x');
   if (u.pathname === '/fail-next') S.failNext = true;
+  if (u.pathname === '/round') playRound(u.searchParams.get('w'));
+  if (u.pathname === '/rounds') { for (const x of (u.searchParams.get('seq') || '').split(',')) playRound(x); }
+  if (u.pathname === '/no-winlimit') S.noWinlimit = u.searchParams.get('v') !== '0';
+  if (u.pathname === '/lock-freeze') { S.lockFreeze = u.searchParams.get('v') !== '0'; if (S.lockFreeze) cv.mp_freezetime = '15'; }
   if (u.pathname === '/exec-sleep') { Object.assign(cv, { mp_maxrounds: '24', mp_freezetime: '15', mp_ct_default_primary: '', mp_t_default_primary: '' }); log('#MATCHZY sleep.cfg (manual)'); }
   res.writeHead(200, { 'content-type': 'application/json' });
-  res.end(JSON.stringify({ map: S.map, autostart: S.autostart, busy: Date.now() < S.busyUntil, cv, sleepAt: S.sleepAt, restarts: S.restarts, configLog: S.configLog.slice(-200), players: S.players }));
+  res.end(JSON.stringify({ map: S.map, autostart: S.autostart, busy: Date.now() < S.busyUntil, cv, sleepAt: S.sleepAt, restarts: S.restarts, configLog: S.configLog.slice(-200), players: S.players,
+    logOn: S.logOn, logHttp: S.logHttp, score: S.score, played: S.played, over: S.over, gameOvers: S.gameOvers }));
 }).listen(+ctlPort, '127.0.0.1');

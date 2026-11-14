@@ -11,7 +11,7 @@
   const WEAPON_LABELS = { ak47: 'AK-47', m4a4: 'M4A4', m4a1s: 'M4A1-S', awp: 'AWP' };
   const wsList = (d) => (d && d.catalog && d.catalog.workshop) || [];
   // Серверийн map нэр workshop catalog-ийн аль map вэ ("aim_map", "workshop/3469339086/aim_map")
-  const wsOf = (d, name) => { if (!name) return null; const n = String(name).toLowerCase().replace(/\\/g, '/'); return wsList(d).find(m => n === m.mapName || n.endsWith('/' + m.mapName) || n.includes('/' + m.workshopId + '/')) || null; };
+  const wsOf = (d, name) => { if (!name) return null; const n = String(name).toLowerCase().replace(/\\/g, '/'); return wsList(d).find(m => (m.mapNames || [m.mapName]).some(x => n === x || n.endsWith('/' + x)) || n.includes('/' + m.workshopId + '/')) || null; };
   const aimLabel = (a) => a ? `AIM ${a.size}v${a.size} · ${WEAPON_LABELS[a.weapon] || a.weapon} · First to ${a.rounds}` : '';
 
   async function fetchState() {
@@ -116,9 +116,16 @@
     const w = ar && ar.workshop;
     return `
       ${aim ? `<div class="aim-live">
-        <div><div class="kpi-label">Идэвхтэй</div><div class="display" style="font-size:20px">${esc(aimLabel(aim))}</div>
-          <div class="dim" style="font-size:12px">${esc((list.find(m => m.id === aim.map) || { name: aim.map }).name)}${w ? ' · ' + esc((WS_PHASE[w.phase] || [''])[0]) : ''}</div></div>
+        <div style="flex:1;min-width:0"><div class="kpi-label">Идэвхтэй</div><div class="display" style="font-size:20px">${esc(aimLabel(aim))}</div>
+          <div class="dim" style="font-size:12px">${esc((list.find(m => m.id === aim.map) || { name: aim.map }).name)}${w && w.runtimeMap ? ` (${esc(w.runtimeMap)})` : ''}${w ? ' · ' + esc((WS_PHASE[w.phase] || [''])[0]) : ''}</div></div>
+        ${d.server && d.server.score && !ar.result ? `<div class="aim-score"><span class="ct">CT</span><b class="ct">${d.server.score.ct}</b><span class="dim">:</span><b class="t">${d.server.score.t}</b><span class="t">T</span></div>` : ''}
+      </div>
+      ${ar.result ? `<div class="aim-result ${ar.result.winner === 'CT' ? 'ct' : 't'}">
+        <div class="display" style="font-size:22px">🏆 ${ar.result.winner === 'CT' ? 'Counter-Terrorists' : 'Terrorists'} ялав</div>
+        <div class="aim-final"><span class="ct">CT</span><b class="ct">${ar.result.ct}</b><span class="dim">:</span><b class="t">${ar.result.t}</b><span class="t">T</span></div>
+        <div class="dim" style="font-size:12px">First to ${ar.result.rounds}${(ar.result.names[ar.result.winner] || []).length ? ' · ' + esc(ar.result.names[ar.result.winner].join(', ')) : ''}${ar.result.at ? ' · ' + U.timeAgo(ar.result.at) : ''} · «Дахин тоглох» дарахад 0:0-ээс эхэлнэ</div>
       </div>` : ''}
+      ${d.aimSkins ? `<div class="note ${d.aimSkins.T && d.aimSkins.CT ? '' : 'warn'}" style="display:block;font-size:12px;margin-bottom:10px;overflow-wrap:anywhere">🎨 Таны ${esc(WEAPON_LABELS[d.aimSkins.weapon] || d.aimSkins.weapon)} skin: T ${d.aimSkins.T ? '✓' : '✗ default'} · CT ${d.aimSkins.CT ? '✓' : '✗ default'}${d.aimSkins.T && d.aimSkins.CT ? '' : ` — AIM-д хоёр багт ижил зэвсэг өгдөг ч WeaponPaints таны <b>тухайн үеийн багийн</b> loadout-ийг хэрэглэдэг. <a href="#skins">SKIN INVENTORY</a>-д ${!d.aimSkins.T && !d.aimSkins.CT ? 'T ба CT' : !d.aimSkins.T ? 'T' : 'CT'} багт мөн сонгоно уу.`}</div>` : ''}` : ''}
       <div class="ws-maps">${list.map(m => {
         const inst = ar && ar.installed ? ar.installed[m.id] : null, cur = aim && aim.map === m.id;
         const known = !ar || (ar.agentCatalog || []).includes(m.id);
@@ -141,10 +148,10 @@
         ${agentOld ? '<div class="note warn mb">⚠️ Серверийн BERX Agent хуучин байна — Workshop/AIM-д agent v1.3.0 хэрэгтэй (README).</div>' : ''}
         <div class="adm-row"><span>Багийн хэмжээ</span>${seg('size', (d.catalog && d.catalog.sizes) || [1, 2], v => v + 'v' + v)}</div>
         <div class="adm-row"><span>Зэвсэг</span>${seg('weapon', Object.keys((d.catalog && d.catalog.weapons) || WEAPON_LABELS), v => WEAPON_LABELS[v] || v)}</div>
-        <div class="adm-row"><span>Round</span>${seg('rounds', (d.catalog && d.catalog.rounds) || [10, 13, 16], v => 'First to ' + v)}</div>
-        <div class="dim" style="font-size:11.5px;margin:4px 0 10px">Bot kick · team balance OFF · freezetime 0 · тоглолт дуусахад ижил map дээр дахин эхэлнэ. MatchZy AIM-ийн үед унтаж, Competitive руу буцахад өмнөх тохиргоо сэргээгдэнэ.</div>
+        <div class="adm-row"><span>Round</span>${seg('rounds', (d.catalog && d.catalog.rounds) || [10, 13, 16, 30, 60], v => 'First to ' + v)}</div>
+        <div class="dim" style="font-size:11.5px;margin:4px 0 10px">Bot байхгүй · team balance/limit OFF · freezetime 0 · round хооронд 1с · buy menu байхгүй · round бүр сонгосон зэвсэг, бүтэн сум, 100 HP, kevlar+helmet. Аль нэг баг N round хожиход дуусна (тал солихгүй, overtime байхгүй). MatchZy AIM-ийн үед унтаж, Competitive руу буцахад өмнөх тохиргоо сэргээгдэнэ.</div>
         <div class="row wrap" style="gap:8px">
-          ${aim ? `<button class="btn primary" data-action="aim-rematch" ${online && w && ['ready', 'configuring'].includes(w.phase) ? '' : 'disabled'}>↻ Дахин тоглох / тохиргоо хэрэгжүүлэх</button>`
+          ${aim ? `<button class="btn primary" data-action="aim-rematch" ${online && w && ['ready', 'configuring', 'error'].includes(w.phase) ? '' : 'disabled'}>↻ Дахин тоглох (0:0) / тохиргоо хэрэгжүүлэх</button>`
             : `<button class="btn primary" data-action="aim-start" data-map="${esc(list[0].id)}" ${online && !agentOld ? '' : 'disabled'}>▶ AIM эхлүүлэх · ${esc(list[0].name)}</button>`}
           ${aim && w && w.phase === 'error' ? `<button class="btn" data-action="aim-start" data-map="${esc(aim.map)}" ${online ? '' : 'disabled'}>Map-ыг дахин ачаалах</button>` : ''}
         </div>

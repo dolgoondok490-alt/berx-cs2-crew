@@ -19,7 +19,7 @@ const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 
-const VERSION = '1.3.0';
+const VERSION = '1.3.1';
 
 /* ---------- тохиргоо ---------- */
 (function loadEnv() {
@@ -192,6 +192,12 @@ async function checkPlugins() {
 
 /* ---------- MatchZy event-үүд (localhost HTTP) ---------- */
 http.createServer((req, res) => {
+  // CS2 server log (AIM горимын оноо): logaddress_add_http "http://127.0.0.1:<EVENTS_PORT>/cs2log/<token>" — token нь зөвхөн энэ agent-д
+  if (req.method === 'POST' && typeof onCs2Log === 'function' && arenaLogToken() && req.url === '/cs2log/' + arenaLogToken()) {
+    let body = ''; req.on('data', c => { body += c; if (body.length > 1e6) req.destroy(); });
+    req.on('end', () => { res.writeHead(200); res.end('ok'); try { onCs2Log(body); } catch (e) { dbg('cs2log', e.message); } });
+    return;
+  }
   if (req.method !== 'POST' || req.url !== '/matchzy' || req.headers['x-berx-agent'] !== eventSecret) { res.writeHead(404); return res.end(); }
   let body = ''; req.on('data', c => { body += c; if (body.length > 2e5) req.destroy(); });
   req.on('end', () => {
@@ -311,12 +317,48 @@ let arenaLib = null, CATALOG = [];
 try { arenaLib = require('./arena-modes'); CATALOG = arenaLib.loadCatalog(); }
 catch (e) { log('⚠ Workshop/AIM идэвхгүй: agent хавтсанд arena-modes.js, workshop-maps.json байгаа эсэхийг шалгана уу —', e.message); }
 const wsEntry = (id) => CATALOG.find(m => m.id === id) || null;
+const ARENA_CONFIG_TIMEOUT_MS = Math.max(10000, +process.env.ARENA_CONFIG_TIMEOUT_MS || 60000);  // map дээр гарснаас хойш тохиргоо батлах хугацаа
 const ARENA_VERIFY_MS = Math.max(5000, +process.env.ARENA_VERIFY_MS || 30000);   // AIM тохиргоо өөрчлөгдсөн эсэхийг шалгах давтамж
 const ARENA_FILE = process.env.BERX_ARENA_STATE || path.join(__dirname, '.berx-arena-state.json');
-let arena = { aim: null, snapshot: null, matchzyAutostart: null, workshop: null };
+let arena = { aim: null, snapshot: null, matchzyAutostart: null, workshop: null, log: null, result: null };
 try { const saved = JSON.parse(fs.readFileSync(ARENA_FILE, 'utf8')); if (saved && typeof saved === 'object') arena = { ...arena, ...saved }; } catch (e) { /* анх удаа */ }
 const saveArena = () => { try { fs.writeFileSync(ARENA_FILE, JSON.stringify(arena, null, 2)); } catch (e) { log('⚠ Arena төлөв хадгалагдсангүй:', e.message); } };
 if (arena.aim) { state.mode = 'aim'; log(`AIM горим үргэлжилж байна: ${arena.aim.map} (${arena.aim.size}v${arena.aim.size}, ${arena.aim.weapon}, first to ${arena.aim.rounds})`); }
+function arenaLogToken() { return arena && arena.log && arena.log.token; }
+const logUri = () => `http://127.0.0.1:${CFG.eventsPort}/cs2log/${arena.log.token}`;
+// Агентын бүтээсэн командыг л RCON руу (хэрэглэгчийн текст биш); ; болон мөр шилжилт хэзээ ч орохгүй
+const safe = (cmd) => { if (!/^[\w .:"\-/]+$/.test(cmd)) throw new Error('Аюултай тэмдэгт: ' + cmd); return cmd; };
+// AIM-ийн оноог CS2 log-оос авах: logaddress_add_http (зөвхөн 127.0.0.1). Өмнө log унтраалттай байсан бол буцахад унтраана.
+async function startAimLog() {
+  if (!arena.log) {
+    const st = await rcon.exec('log').catch(() => '');
+    arena.log = { token: crypto.randomBytes(12).toString('hex'), wasOn: /currently logging to/i.test(st) && !/not currently logging/i.test(st) };
+  }
+  await rcon.exec('log on');
+  await rcon.exec(safe(`logaddress_add_http "${logUri()}"`));
+}
+function stopAimLogCommands() {
+  if (!arena.log) return [];
+  return [safe(`logaddress_del_http "${logUri()}"`), ...(arena.log.wasOn ? [] : ['log off'])];
+}
+// Log мөр бүр: round-ын оноо, тоглолт дууссан, дахин эхэлсэн
+function onCs2Log(body) {
+  if (!arena.aim) return;
+  let changed = false;
+  for (const line of String(body).split(/\r?\n/)) {
+    const ev = arenaLib.parseLogLine(line); if (!ev) continue;
+    if (ev.type === 'round') {
+      state.score = { ct: ev.ct, t: ev.t }; state.phase = 'live'; changed = true;
+      const r = arenaLib.resultOf(state.score, arena.aim.rounds);
+      if (r) { arena.result = { ...r, rounds: arena.aim.rounds, at: Date.now(), names: teamNames() }; state.phase = 'finished'; log(`🏆 AIM дууслаа: ${r.winner} ${r.ct}:${r.t} (first to ${arena.aim.rounds})`); saveArena(); }
+    } else if (ev.type === 'gameover') {
+      state.phase = 'finished'; changed = true;
+      if (!arena.result) { const r = arenaLib.resultOf(state.score, arena.aim.rounds); if (r) { arena.result = { ...r, rounds: arena.aim.rounds, at: Date.now(), names: teamNames() }; saveArena(); } }
+    } else if (ev.type === 'restart') { state.score = { ct: 0, t: 0 }; state.phase = 'live'; changed = true; }
+  }
+  if (changed) heartbeat().catch(() => {});
+}
+const teamNames = () => ({ CT: state.players.filter(p => p.team === 'CT' && !p.bot).map(p => p.name).slice(0, 5), T: state.players.filter(p => p.team === 'T' && !p.bot).map(p => p.name).slice(0, 5) });
 const needArena = () => { if (!arenaLib || !CATALOG.length) throw new Error('Agent дээр Workshop/AIM модуль алга — agent хавтсанд arena-modes.js, workshop-maps.json хуулаад agent-ийг дахин асаана уу'); };
 // AIM горимд MatchZy-г сэрээх эсвэл тохиргоог эвдэх командууд
 const AIM_BLOCKED = ['apply_teams', 'match_start', 'match_stop', 'knife', 'bot_add', 'warmup_start'];
@@ -339,25 +381,46 @@ async function startWorkshop(entry, purpose) {
 // Competitive руу буцах: snapshot сэргээх + MatchZy-ийн анхны autostart горим (map солихоос ӨМНӨ)
 function leaveAimCommands() {
   if (!arena.aim) return [];
-  const cmds = arenaLib.restoreCommands(arena.snapshot);
+  const cmds = [...stopAimLogCommands(), ...arenaLib.restoreCommands(arena.snapshot)];
   if (state.matchzy || arena.matchzyAutostart !== null) cmds.push(`matchzy_autostart_mode ${[0, 1, 2].includes(arena.matchzyAutostart) ? arena.matchzyAutostart : 1}`);
   return cmds;
 }
 function clearAim() {
-  arena = { aim: null, snapshot: null, matchzyAutostart: null, workshop: null };
+  arena = { aim: null, snapshot: null, matchzyAutostart: null, workshop: null, log: null, result: null };
   state.mode = 'competitive'; saveArena();
 }
+// Readback: бодит утгыг серверээс уншиж шалгана. required бүгд таарвал ok. optional таараагүйг жагсаана.
 async function verifyAim() {
-  for (const [k, v] of Object.entries(arenaLib.aimExpect(arena.aim))) {
+  const exp = arenaLib.aimExpect(arena.aim, { winlimit: arena.aim.winlimit !== false });
+  const bad = [], badOpt = [];
+  for (const [k, v] of Object.entries(exp.required)) {
     const got = arenaLib.parseCvar(await rcon.exec(k).catch(() => ''), k);
-    if (got === null || !sameVal(got, v)) { dbg('AIM шалгалт', k, got, '≠', v); return false; }
+    if (got === null || !sameVal(got, v)) bad.push(`${k}=${got === null ? '?' : got} (хүлээгдсэн ${v})`);
   }
-  return true;
+  for (const [k, v] of Object.entries(exp.optional)) {
+    const got = arenaLib.parseCvar(await rcon.exec(k).catch(() => ''), k);
+    if (got === null || !sameVal(got, v)) badOpt.push(k);
+  }
+  if (bad.length) dbg('AIM шалгалт:', bad.join(', '));
+  return { ok: !bad.length, bad, badOpt };
 }
-async function applyAimConfig() {
-  for (const x of arenaLib.aimConfig(arena.aim)) await rcon.exec(x);
+async function applyAimConfig(opts = {}) {
+  for (const x of arenaLib.aimConfig(arena.aim, { winlimit: arena.aim.winlimit !== false, restart: opts.restart })) await rcon.exec(safe(x));
+  if (opts.restart !== false) { arena.result = null; state.score = { ct: 0, t: 0 }; }
   arena.workshop.configAt = Date.now();
-  log(`✓ AIM тохиргоо: ${arena.aim.size}v${arena.aim.size}, ${arenaLib.WEAPON_LABELS[arena.aim.weapon]}, first to ${arena.aim.rounds}`);
+  log(`✓ AIM тохиргоо: ${arena.aim.size}v${arena.aim.size}, ${arenaLib.WEAPON_LABELS[arena.aim.weapon]}, first to ${arena.aim.rounds}${opts.restart === false ? ' (дахин хэрэгжүүлэв, оноо хэвээр)' : ''}`);
+}
+// optional readback-ийн дүнгээр: mp_winlimit дэмжигдээгүй бол 2N-1 + clinch fallback; equipment reset алга бол анхааруулга
+async function handleOptional(badOpt) {
+  const w = [];
+  if (badOpt.includes('mp_winlimit') && arena.aim.winlimit !== false) {
+    arena.aim.winlimit = false; saveArena();
+    log('⚠ Сервер mp_winlimit-ийг хүлээж авсангүй — First to N-ийг mp_maxrounds 2N-1 + clinch-ээр хэрэгжүүлнэ');
+    await applyAimConfig(); return { reapplied: true };
+  }
+  if (arena.aim.winlimit === false) w.push('mp_winlimit дэмжигдээгүй тул First to N = mp_maxrounds 2N-1 (draw round гарвал тэнцээ байж болно)');
+  if (badOpt.includes('mp_equipment_reset_rounds')) w.push('mp_equipment_reset_rounds-ийг сервер хүлээж аваагүй — амьд үлдсэн тоглогчийн сум round бүр бүрэн дүүрэхгүй байж болно');
+  return { warning: w.join(' · ') || null };
 }
 const ARENA_HANDLERS = {
   async aim_start(a) {
@@ -373,9 +436,12 @@ const ARENA_HANDLERS = {
       if (state.matchzy) { await rcon.exec('css_restart'); await rcon.exec('matchzy_autostart_mode 0'); }
     }
     await rcon.exec('game_type 0'); await rcon.exec('game_mode 1');
-    arena.aim = { map: entry.id, ...s, since: Date.now() };
+    arena.aim = { map: entry.id, ...s, since: Date.now(), winlimit: arena.aim ? arena.aim.winlimit : undefined };
+    arena.result = null;
+    await startAimLog();
     state.mode = 'aim'; state.phase = 'warmup'; state.score = null;
-    if (arenaLib.isOnMap(state.map, entry) && state.statusOk) {
+    const wf = arenaLib.workshopFiles(CFG.cs2Dir, entry.workshopId);
+    if (arenaLib.isOnMap(state.map, entry, wf ? wf.names : []) && state.statusOk) {
       arena.workshop = { id: entry.id, workshopId: entry.workshopId, purpose: 'aim', phase: 'configuring', since: Date.now(), onMapAt: Date.now() - 3000, error: null, warning: null };
       saveArena();
       return { output: `${entry.mapName} аль хэдийн ачаалагдсан — AIM тохиргоог хэрэгжүүлж байна` };
@@ -387,11 +453,13 @@ const ARENA_HANDLERS = {
   async aim_rematch(a) {
     needArena();
     if (!arena.aim) throw new Error('AIM горим идэвхгүй байна');
-    const w = arena.workshop;
-    if (!w || !['ready', 'configuring'].includes(w.phase)) throw new Error('AIM map хараахан бэлэн болоогүй байна');
-    if (a && a.size !== undefined) Object.assign(arena.aim, arenaLib.aimSettings(a, wsEntry(arena.aim.map)));
-    state.score = null;
-    await applyAimConfig();                       // mp_restartgame 1 орсон
+    const w = arena.workshop, entry = wsEntry(arena.aim.map), wf = arenaLib.workshopFiles(CFG.cs2Dir, entry.workshopId);
+    const onMapNow = arenaLib.isOnMap(state.map, entry, wf ? wf.names : []);
+    if (!w || !(['ready', 'configuring'].includes(w.phase) || (w.phase === 'error' && onMapNow))) throw new Error('AIM map хараахан бэлэн болоогүй байна');
+    if (a && a.size !== undefined) Object.assign(arena.aim, arenaLib.aimSettings(a, entry));
+    w.error = null; w.warning = null; w.verified = false;
+    await startAimLog();
+    await applyAimConfig();                       // mp_restartgame 1 → оноо 0:0, сонгосон тохиргоогоор
     w.phase = 'configuring'; w.onMapAt = Date.now() - 3000; saveArena();
     return { output: `Дахин эхэллээ: ${arena.aim.size}v${arena.aim.size}, ${arenaLib.WEAPON_LABELS[arena.aim.weapon]}, first to ${arena.aim.rounds}` };
   },
@@ -420,25 +488,36 @@ async function arenaTick() {
   const w = arena.workshop; if (!w || !arenaLib) return;
   const entry = wsEntry(w.id); if (!entry) return;
   const now = Date.now(), before = JSON.stringify(w);
-  const onMap = state.online && state.statusOk && arenaLib.isOnMap(state.map, entry);
+  const files = arenaLib.workshopFiles(CFG.cs2Dir, entry.workshopId);
+  const onMap = state.online && state.statusOk && arenaLib.isOnMap(state.map, entry, files ? files.names : []);
   if (['requested', 'downloading', 'loading', 'configuring'].includes(w.phase)) {
     let configVerified = false;
     if (onMap && w.purpose === 'aim' && arena.aim) {
       w.onMapAt = w.onMapAt || now;
+      if (w.runtimeMap !== state.map) { w.runtimeMap = state.map; log(`✓ Сервер map-аа мэдээллээ: ${state.map}`); }
       // MatchZy sleep.cfg / gamemode cfg map эхэлснээс ~1с дараа ажилладаг → 3с хүлээгээд AIM тохиргоо
       if (now - w.onMapAt >= 3000 && (!w.configAt || (now - w.configAt > 20000 && !w.verified))) await applyAimConfig();
-      if (w.configAt && now - w.configAt >= 1000) configVerified = w.verified = await verifyAim();
-      if (!configVerified && w.configAt && now - w.onMapAt > 60000) { configVerified = true; w.warning = 'Map ачаалагдсан ч AIM тохиргоог буцааж уншиж баталж чадсангүй — тоглоомд шалгана уу'; }
+      if (w.configAt && now - w.configAt >= 1000) {
+        const v = await verifyAim();
+        if (v.ok) {
+          const o = await handleOptional(v.badOpt);
+          if (!o.reapplied) { configVerified = w.verified = true; w.warning = o.warning || null; }
+        } else if (now - w.onMapAt > ARENA_CONFIG_TIMEOUT_MS) {
+          // Map ачаалагдсан ч тохиргоо баталгаажаагүй → "Бэлэн" ГЭЖ ХЭЛЭХГҮЙ
+          w.phase = 'error'; w.error = 'Map ачаалагдсан боловч AIM тохиргоо баталгаажсангүй: ' + v.bad.slice(0, 4).join(', ') + ' — «Дахин тоглох» дарж дахин оролдоно уу';
+        }
+      }
     } else if (onMap) configVerified = true;
-    const files = arenaLib.workshopFiles(CFG.cs2Dir, entry.workshopId);
-    Object.assign(w, arenaLib.nextPhase(w, { now, onMap, files, rconOk: state.online && state.statusOk, configVerified }));
-    if (w.phase === 'ready') { w.verified = false; if (w.purpose === 'aim') { state.phase = 'live'; state.score = null; } log(`✓ Workshop map бэлэн: ${entry.mapName}`); }
+    if (w.phase !== 'error') Object.assign(w, arenaLib.nextPhase(w, { now, onMap, files, rconOk: state.online && state.statusOk, configVerified }));
+    if (w.phase === 'ready') { w.verified = false; if (w.purpose === 'aim') { state.phase = 'live'; state.score = state.score || { ct: 0, t: 0 }; } log(`✓ Workshop map бэлэн: ${state.map}`); }
     if (w.phase === 'error') log('✖ Workshop:', w.error);
   } else if (w.phase === 'ready' && w.purpose === 'aim' && arena.aim && state.statusOk) {
     if (!onMap) { w.phase = 'error'; w.error = `Сервер өөр map руу шилжсэн (${state.map || '?'}) — AIM-ийг дахин эхлүүлэх эсвэл Competitive руу буцна уу`; log('⚠', w.error); }
     else if (now - (w.lastVerify || 0) > ARENA_VERIFY_MS) {
       w.lastVerify = now;
-      if (!w.warning && !(await verifyAim())) { log('⚠ AIM тохиргоо өөрчлөгдсөн байна — дахин хэрэгжүүлнэ'); await applyAimConfig(); }
+      const v = await verifyAim();
+      // MatchZy/cfg тохиргоог дарж бичсэн бол дахин хэрэгжүүлнэ — тоглолтын оноог ТЭГЛЭХГҮЙ
+      if (!v.ok) { log('⚠ AIM тохиргоо өөрчлөгдсөн байна (' + v.bad.slice(0, 3).join(', ') + ') — дахин хэрэгжүүлнэ'); await applyAimConfig({ restart: false }); }
     }
   }
   if (JSON.stringify(w) !== before) { w.updatedAt = now; saveArena(); }
@@ -448,8 +527,9 @@ function arenaStatus() {
   const w = arena.workshop;
   return {
     mode: arena.aim ? 'aim' : 'competitive',
-    aim: arena.aim ? { map: arena.aim.map, size: arena.aim.size, weapon: arena.aim.weapon, rounds: arena.aim.rounds, since: arena.aim.since } : null,
-    workshop: w ? { id: w.id, workshopId: w.workshopId, purpose: w.purpose, phase: w.phase, error: w.error || null, warning: w.warning || null, since: w.since, updatedAt: w.updatedAt || w.since } : null,
+    aim: arena.aim ? { map: arena.aim.map, size: arena.aim.size, weapon: arena.aim.weapon, rounds: arena.aim.rounds, since: arena.aim.since, winlimit: arena.aim.winlimit !== false } : null,
+    workshop: w ? { id: w.id, workshopId: w.workshopId, purpose: w.purpose, phase: w.phase, error: w.error || null, warning: w.warning || null, since: w.since, updatedAt: w.updatedAt || w.since, runtimeMap: w.runtimeMap || null } : null,
+    result: arena.result || null,
     installed: Object.fromEntries(CATALOG.map(m => { const f = arenaLib.workshopFiles(CFG.cs2Dir, m.workshopId); return [m.id, f ? f.installed : null]; })),
     catalog: CATALOG.map(m => m.id)
   };
@@ -465,8 +545,9 @@ async function runCommand(c) {
     if (c.type === 'apply_teams') cmds = writeMatchConfig();
     else if (ARENA_HANDLERS[c.type]) { const r = await ARENA_HANDLERS[c.type](c.args || {}); cmds = r.cmds || []; note += r.output || ''; }
     else { const h = HANDLERS[c.type]; if (!h) throw new Error('Зөвшөөрөгдөөгүй команд: ' + c.type); cmds = h(c.args || {}); }
-    cmds = pre.concat(cmds);
     let out = '';
+    // AIM-аас гарах сэргээлт (agent өөрөө бүтээсэн, log хаяг "/" агуулна) → safe() шалгалт; бусад команд хуучин дүрмээрээ
+    for (const x of pre) await rcon.exec(safe(x));
     for (const x of cmds) { if (!/^[\w .:"\-]+$/.test(x)) throw new Error('Аюултай тэмдэгт'); out += (await rcon.exec(x)).slice(0, 300); }
     if (c.type === 'apply_teams') state.appliedTeamsVersion = lastTeams.version;
     if (/Unknown command/i.test(out)) throw new Error('Сервер командыг танихгүй байна: ' + out.trim().slice(0, 160));

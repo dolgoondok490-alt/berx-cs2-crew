@@ -26,7 +26,7 @@ const rconLog = path.join(tmp, 'rcon.log'); fs.writeFileSync(rconLog, '');
 run([path.join(ROOT, 'tests/skins/fake-supabase.js'), pgPort], {}, path.join(tmp, 'pg.log'));
 run([path.join(ROOT, 'tests/server/fake-cs2.js'), rconPort, RCON_PW, rconLog, ctlPort, CS2, '6000'], {}, path.join(tmp, 'cs2.out'));
 run([path.join(ROOT, 'server/server.js')], { PORT: sitePort, SUPABASE_URL: `http://127.0.0.1:${pgPort}`, SUPABASE_SECRET_KEY: 'sb_secret_TESTKEY123', SESSION_SECRET: 'arena_session_secret_arena_session_secret',
-  ADMIN_LOGINS: 'a@berx.mn', SERVER_AGENT_SECRET: SECRET, SERVER_PASSWORD: 'friendpw' }, path.join(tmp, 'site.log'));
+  ADMIN_LOGINS: 'a@berx.mn', SERVER_AGENT_SECRET: SECRET, SERVER_PASSWORD: 'friendpw', SKINS_ENABLED: '1' }, path.join(tmp, 'site.log'));
 const B = `http://127.0.0.1:${sitePort}/api`, PG = `http://127.0.0.1:${pgPort}`, CTL = `http://127.0.0.1:${ctlPort}`;
 await until(() => fetch(B + '/health').then(r => r.ok), 10000);
 const cs2 = () => fetch(CTL + '/state').then(r => r.json());
@@ -69,7 +69,7 @@ ok(!JSON.stringify(await get(A)).includes(RCON_PW) && !JSON.stringify(await get(
 /* ===================== 2. Agent асаах ===================== */
 console.log('\n== Agent v1.3.0');
 const ARENA_STATE = path.join(tmp, 'arena-state.json');
-const agentEnv = { BERX_AGENT_ENV: path.join(tmp, 'agent.env'), BERX_ARENA_STATE: ARENA_STATE, ARENA_VERIFY_MS: '5000' };
+const agentEnv = { BERX_AGENT_ENV: path.join(tmp, 'agent.env'), BERX_ARENA_STATE: ARENA_STATE, ARENA_VERIFY_MS: '5000', ARENA_CONFIG_TIMEOUT_MS: '12000' };
 fs.writeFileSync(path.join(tmp, 'agent.env'), `BERX_URL=http://127.0.0.1:${sitePort}\nSERVER_AGENT_SECRET=${SECRET}\nRCON_HOST=127.0.0.1\nRCON_PORT=${rconPort}\nRCON_PASSWORD=${RCON_PW}\nEVENTS_PORT=${evPort}\nPOLL_MS=2000\nPUBLIC_ADDRESS=203.0.113.5:27015\nCS2_DIR=${CS2}\n`);
 const agentLog = path.join(tmp, 'agent.log');
 let agent = run([path.join(ROOT, 'agent/berx-agent.js')], agentEnv, agentLog);
@@ -92,7 +92,7 @@ const seen = new Set(); let premature = null, sawBusyOnline = false;
 const fin = await until(async () => {
   const st = await get(A), c = await cs2(), w = st.arena && st.arena.workshop;
   if (w) seen.add(w.phase);
-  if (w && w.phase === 'ready' && !(c.map === 'aim_map' && c.cv.mp_ct_default_primary === 'weapon_awp' && c.cv.mp_maxrounds === '19')) premature = { phase: w.phase, map: c.map, cv: c.cv.mp_ct_default_primary };
+  if (w && w.phase === 'ready' && !(c.map === 'aim_map_d' && c.cv.mp_ct_default_primary === 'weapon_awp' && c.cv.mp_winlimit === '10' && c.cv.mp_freezetime === '0' && c.cv.mp_round_restart_delay === '1')) premature = { phase: w.phase, map: c.map, cv: c.cv.mp_ct_default_primary };
   if (c.busy && w && w.phase === 'downloading') sawBusyOnline = true;
   return w && ['ready', 'error'].includes(w.phase) ? st : null;
 }, 60000, 300);
@@ -102,9 +102,14 @@ ok(sawBusyOnline, 'сервер татаж байх үед (RCON хариугү�
 ok(seen.has('configuring') || seen.has('loading'), 'ачаалах/тохируулах үе шат харагдсан');
 ok(premature === null, 'map ачаалагдаж, AIM тохиргоо батлагдахаас ӨМНӨ "Бэлэн" гэж хэзээ ч мэдээлээгүй ' + JSON.stringify(premature));
 let c = await cs2();
-ok(c.map === 'aim_map' && fin.server.map === 'aim_map', 'сервер бодитоор aim_map дээр');
+ok(c.map === 'aim_map_d' && fin.server.map === 'aim_map_d', 'бодит runtime map нэр aim_map_d — зөв танигдсан (regression: өмнө 3 мин дараа алдаа өгдөг байсан)');
+ok(fin.arena.workshop.runtimeMap === 'aim_map_d', 'сайт: runtime map aim_map_d харагдана');
 ok(c.autostart === 0 && c.restarts >= 1, 'MatchZy: css_restart + matchzy_autostart_mode 0 (унтсан)');
-ok(c.cv.mp_maxrounds === '19' && c.cv.mp_freezetime === '0' && c.cv.mp_autoteambalance === '0' && c.cv.mp_limitteams === '0' && c.cv.bot_quota === '0' && c.cv.mp_t_default_primary === 'weapon_awp' && c.cv.mp_match_end_restart === '1', 'AIM тохиргоо: first to 10 (maxrounds 19), freezetime 0, balance off, bot 0, AWP, дуусахад дахин эхэлнэ');
+ok(c.cv.mp_freezetime === '0' && c.cv.mp_round_restart_delay === '1', 'readback: freezetime 0, round restart delay 1с');
+ok(c.cv.mp_winlimit === '10' && c.cv.mp_maxrounds === '39' && c.cv.mp_overtime_enable === '0' && c.cv.mp_halftime === '0', 'First to 10: mp_winlimit 10 (draw round-д тэсвэртэй), maxrounds хязгаар болохгүй (39), overtime/тал солих байхгүй');
+ok(c.cv.mp_autoteambalance === '0' && c.cv.mp_limitteams === '0' && c.cv.bot_quota === '0' && c.cv.mp_buytime === '0' && c.cv.mp_startmoney === '0', 'bot 0, autobalance/limitteams OFF, buy menu байхгүй (buytime 0, мөнгө 0)');
+ok(c.cv.mp_t_default_primary === 'weapon_awp' && c.cv.mp_ct_default_primary === 'weapon_awp' && c.cv.mp_equipment_reset_rounds === '1' && c.cv.mp_free_armor === '2', 'round бүр: сонгосон зэвсэг (AWP) + equipment reset (бүтэн сум) + kevlar/helmet');
+ok(c.logOn && c.logHttp.length === 1 && /^http:\/\/127\.0\.0\.1:\d+\/cs2log\/[0-9a-f]{24}$/.test(c.logHttp[0]), 'оноо авах log: зөвхөн 127.0.0.1 agent руу (token-той)');
 ok(!c.players.some(p => p.bot), 'bot kick хийгдсэн');
 const lines = fs.readFileSync(rconLog, 'utf8').split('\n');
 const idx = (re) => lines.findIndex(l => re.test(l));
@@ -126,7 +131,12 @@ r = await act(A, 'server.join', { team: 'CT' }); ok(r.s >= 400, '1v1: CT дүү�
 for (const t of ['apply_teams', 'match_start', 'knife']) { r = await cmd(A, t, t === 'knife' ? { value: true } : {}); ok(r.s >= 400 && /AIM/.test(r.j.error), `AIM үед ${t} татгалзана (MatchZy-г сэрээхгүй)`); }
 // MatchZy/өөр cfg AIM тохиргоог дарж бичвэл agent дахин хэрэгжүүлнэ
 await fetch(CTL + '/exec-sleep');
-ok(!!await until(async () => (await cs2()).cv.mp_maxrounds === '19', 20000), 'AIM тохиргоо өөрчлөгдвөл agent автоматаар сэргээнэ');
+await fetch(CTL + '/rounds?seq=CT,T,CT');
+ok(!!await until(async () => { const x = await get(A); return x.server.score && x.server.score.ct === 2 && x.server.score.t === 1 ? x : null; }, 8000), 'live оноо (CS2 log-оос): CT 2 : 1 T');
+const rgBefore = fs.readFileSync(rconLog, 'utf8').split('\n').filter(l => / mp_restartgame 1$/.test(l)).length;
+await fetch(CTL + '/exec-sleep');
+ok(!!await until(async () => { const c2 = await cs2(); return c2.cv.mp_winlimit === '10' && c2.cv.mp_freezetime === '0' && c2.cv.mp_ct_default_primary === 'weapon_awp'; }, 20000), 'MatchZy/cfg дарж бичвэл agent автоматаар сэргээнэ');
+ok(fs.readFileSync(rconLog, 'utf8').split('\n').filter(l => / mp_restartgame 1$/.test(l)).length === rgBefore && (await cs2()).score.ct === 2, 'сэргээхдээ тоглолтыг дахин эхлүүлээгүй (оноо 2:1 хэвээр)');
 
 /* ===================== 5. Дахин тоглох (тохиргоо солих) ===================== */
 console.log('\n== aim_rematch: 2v2 M4A1-S first to 16');
@@ -134,9 +144,37 @@ r = await cmd(A, 'aim_rematch', { size: 2, weapon: 'm4a1s', rounds: 16 }); ok(r.
 let done = await cmdDone(A, 'aim_rematch'); ok(done && done.status === 'done', 'aim_rematch done: ' + (done && done.output));
 ok(!!await until(async () => { const x = await get(A); return x.arena.workshop.phase === 'ready' && x.arena.aim.size === 2 ? x : null; }, 20000), 'дахин бэлэн, 2v2');
 c = await cs2();
-ok(c.cv.mp_maxrounds === '31' && c.cv.mp_ct_default_primary === 'weapon_m4a1_silencer' && c.map === 'aim_map', 'first to 16 (31), M4A1-S, map солигдоогүй');
+ok(c.cv.mp_winlimit === '16' && c.cv.mp_ct_default_primary === 'weapon_m4a1_silencer' && c.map === 'aim_map_d', 'first to 16, M4A1-S, map солигдоогүй');
 ok(fs.readFileSync(rconLog, 'utf8').split('\n').filter(l => / mp_restartgame 1$/.test(l)).length >= 2, 'mp_restartgame 1 — тоглолт дахин эхэлсэн');
 ok((await get(K)).cap.CT === 2 && (await act(A, 'server.join', { team: 'CT' })).s === 200, '2v2: CT-д 2 дахь хүн орж болно');
+
+/* ===================== 5b. First to 60: 59:59 үед дуусахгүй, 60 хожсон баг ялна ===================== */
+console.log('\n== First to 60');
+r = await cmd(A, 'aim_rematch', { size: 1, weapon: 'ak47', rounds: 60 }); ok(r.s === 200, 'First to 60 (rematch-аар тохируулна)');
+ok(!!await until(async () => { const x = await get(A); return x.arena.workshop.phase === 'ready' && x.arena.aim.rounds === 60 && x.server.score && x.server.score.ct === 0 ? x : null; }, 20000), 'First to 60 бэлэн, оноо 0:0');
+c = await cs2(); ok(c.cv.mp_winlimit === '60' && +c.cv.mp_maxrounds >= 119, 'mp_winlimit 60 (нийт 60 round биш), maxrounds ' + c.cv.mp_maxrounds);
+// 59:59 + 3 draw round
+const seq = []; for (let i = 0; i < 59; i++) { seq.push('CT', 'T'); if (i % 20 === 0) seq.push('draw'); }
+await fetch(CTL + '/rounds?seq=' + seq.join(','));
+s = await until(async () => { const x = await get(A); return x.server.score && x.server.score.ct === 59 && x.server.score.t === 59 ? x : null; }, 10000);
+c = await cs2();
+ok(!!s && !c.over && !s.arena.result && s.server.phase !== 'finished', '59:59 (+3 draw) үед тоглолт дуусаагүй');
+await fetch(CTL + '/round?w=T'); await fetch(CTL + '/round?w=CT');
+await fetch(CTL + '/round?w=CT');   // тоглолт дууссаны дараах round тоологдохгүй
+s = await until(async () => { const x = await get(A); return x.arena.result ? x : null; }, 10000);
+c = await cs2();
+ok(c.over && c.gameOvers === 1 && c.score.t === 60 && c.score.ct === 59, 'сервер: 60:59 үед Game Over');
+ok(s && s.arena.result.winner === 'T' && s.arena.result.t === 60 && s.arena.result.ct === 59 && s.arena.result.rounds === 60 && s.server.phase === 'finished', 'сайт: ялагч T, эцсийн оноо 59:60 (First to 60)');
+ok(JSON.stringify(s.arena.result.names.CT) === '["DOK"]', 'үр дүнд багийн тоглогчдын нэр');
+r = await cmd(A, 'aim_rematch', { size: 1, weapon: 'ak47', rounds: 60 });
+s = await until(async () => { const x = await get(A); return !x.arena.result && x.server.score && x.server.score.ct === 0 && x.server.score.t === 0 && x.arena.workshop.phase === 'ready' ? x : null; }, 20000);
+c = await cs2();
+ok(!!s && c.score.ct === 0 && c.score.t === 0 && !c.over && c.cv.mp_winlimit === '60' && c.cv.mp_ct_default_primary === 'weapon_ak47', 'Rematch: оноо 0:0, ижил тохиргоогоор (AK-47, First to 60) дахин эхэлсэн');
+// AIM зэвсгийн skin: WeaponPaints тухайн үеийн багийн loadout-ийг хэрэглэдэг → сайт анхааруулна
+const akT = { '2': { weapons: { 7: { p: 180, wear: 0.1, seed: 1 } } }, '3': { weapons: {} } };
+await fetch(`${PG}/__insert?t=skin_loadouts`, { method: 'POST', body: JSON.stringify({ steam_id: '76561198000000001', user_id: A.id, loadout: akT, favorites: [], version: 1, updated_at: Date.now() }) });
+s = await get(A); ok(s.aimSkins && s.aimSkins.weapon === 'ak47' && s.aimSkins.T === true && s.aimSkins.CT === false, 'AK-47 skin: T ✓ CT ✗ — сайт "CT-д мөн сонго" гэж анхааруулна (default AK-ийн шалтгаан)');
+const kS = (await get(K)).aimSkins; ok(kS && kS.T === false && kS.CT === false, 'хэрэглэгч бүр ЗӨВХӨН өөрийн loadout-ыг харна (Kaze: AK skin алга)');
 
 /* ===================== 6. Agent restart — AIM төлөв үргэлжилнэ ===================== */
 console.log('\n== agent restart');
@@ -152,7 +190,9 @@ c = await cs2();
 ok(c.map === 'de_inferno', 'сервер de_inferno руу шилжсэн');
 ok(c.autostart === 1, 'MatchZy autostart 1 сэргээгдсэн (warmup/ready систем дахин ажиллана)');
 const diff = Object.keys(before).filter(k => k !== 'mp_warmup_pausetimer' && before[k] !== c.cv[k]);
-ok(diff.length === 0, 'бүх convar AIM-ээс өмнөх утгаараа сэргэсэн' + (diff.length ? ': ' + diff.map(k => `${k} ${before[k]}≠${c.cv[k]}`).join(', ') : ''));
+ok(diff.length === 0, 'бүх convar AIM-ээс өмнөх утгаараа сэргэсэн (mp_winlimit, equipment reset, round restart delay орно)' + (diff.length ? ': ' + diff.map(k => `${k} ${before[k]}≠${c.cv[k]}`).join(', ') : ''));
+ok(c.cv.mp_winlimit === '0' && c.cv.mp_equipment_reset_rounds === '0' && c.cv.mp_round_restart_delay === before.mp_round_restart_delay, 'AIM-ийн шинэ convar-ууд Competitive утгандаа');
+ok(c.logHttp.length === 0 && c.logOn === false, 'log хаяг устсан, log өмнөх шигээ унтраалттай');
 s = await until(async () => { const x = await get(A); return x.arena && x.arena.mode === 'competitive' && x.server.map === 'de_inferno' ? x : null; }, 15000);
 ok(!!s && s.cap.CT === 5 && s.server.mode === 'competitive', 'сайт: Competitive, баг 5v5');
 ok(JSON.parse(fs.readFileSync(ARENA_STATE, 'utf8')).aim === null, 'arena төлөв цэвэрлэгдсэн');
@@ -164,7 +204,7 @@ await cmd(A, 'aim_start', { map: 'aim_map', size: 1, weapon: 'ak47', rounds: 13 
 const t1 = Date.now(); const seen2 = new Set();
 const fin2 = await until(async () => { const x = await get(A); if (x.arena && x.arena.workshop) seen2.add(x.arena.workshop.phase); return x.arena && x.arena.workshop && x.arena.workshop.phase === 'ready' && x.arena.aim && x.arena.aim.rounds === 13 ? x : null; }, 30000, 300);
 ok(!!fin2 && !seen2.has('downloading'), `татагдсан map дахин татахгүй (${Math.round((Date.now() - t1) / 1000)}с, ${[...seen2].join(' → ')})`);
-c = await cs2(); ok(c.cv.mp_maxrounds === '25' && c.cv.mp_ct_default_primary === 'weapon_ak47', 'first to 13 (25), AK-47');
+c = await cs2(); ok(c.cv.mp_winlimit === '13' && c.cv.mp_ct_default_primary === 'weapon_ak47', 'first to 13, AK-47');
 await cmd(A, 'changemap', { map: 'nuke' }); done = await cmdDone(A, 'changemap');
 c = await cs2();
 ok(done && done.status === 'done' && /сэргээлээ/.test(done.output) && c.map === 'de_nuke' && c.autostart === 1 && c.cv.mp_maxrounds === '30' && c.cv.mp_freezetime === '7', 'AIM үед changemap → эхлээд тохиргоо сэргээж Competitive руу буцна');
@@ -174,15 +214,36 @@ console.log('\n== Workshop алдаа');
 await fetch(CTL + '/fail-next');
 r = await cmd(A, 'aim_start', { map: 'aim_map', size: 1, weapon: 'ak47', rounds: 10 }); ok(r.s === 200, 'aim_start (алдаа гаргах) дараалалд ' + (r.j.error || ''));
 done = await cmdDone(A, 'aim_start');
-s = await get(A);
+s = (await until(async () => { const x = await get(A); return x.arena.workshop && x.arena.workshop.phase === 'error' ? x : null; }, 10000)) || await get(A);
 ok(done && done.status === 'failed' && /ачаалагдсангүй/.test(done.output), 'host_workshop_map алдаа → команд failed: ' + (done && done.output));
 ok(s.arena.workshop && s.arena.workshop.phase === 'error' && s.server.map === 'de_nuke', 'сайт: Алдаа төлөв, map солигдоогүй (Бэлэн гэж хэлээгүй)');
 await cmd(A, 'aim_stop', { map: 'mirage' }); done = await cmdDone(A, 'aim_stop');
 c = await cs2(); ok(c.map === 'de_mirage' && c.autostart === 1 && c.cv.mp_freezetime === '7', 'алдааны дараа aim_stop → тохиргоо сэргээж mirage');
 
+/* ===================== 9b. mp_winlimit дэмжигдэхгүй сервер → 2N-1 fallback (анхааруулгатай) ===================== */
+console.log('\n== winlimit fallback / тохиргоо баталгаажаагүй');
+await fetch(CTL + '/no-winlimit?v=1');
+await cmd(A, 'aim_start', { map: 'aim_map', size: 1, weapon: 'm4a4', rounds: 13 });
+s = await until(async () => { const x = await get(A); return x.arena.workshop && ['ready', 'error'].includes(x.arena.workshop.phase) && x.arena.aim && x.arena.aim.rounds === 13 ? x : null; }, 40000);
+c = await cs2();
+ok(s && s.arena.workshop.phase === 'ready' && c.cv.mp_maxrounds === '25' && c.cv.mp_match_can_clinch === '1' && s.arena.aim.winlimit === false && /mp_winlimit/.test(s.arena.workshop.warning || ''), 'mp_winlimit-гүй сервер: First to 13 = maxrounds 25 + clinch, анхааруулга харагдана');
+await fetch(CTL + '/no-winlimit?v=0');
+// required тохиргоо баталгаажихгүй бол "Бэлэн" ГЭЖ ХЭЛЭХГҮЙ
+await fetch(CTL + '/lock-freeze?v=1');
+await cmd(A, 'aim_rematch', { size: 1, weapon: 'm4a4', rounds: 13 });
+const seenLock = new Set();
+let lockStarted = false;
+s = await until(async () => { const x = await get(A); const ph = x.arena.workshop && x.arena.workshop.phase; if (ph === 'configuring') lockStarted = true; if (lockStarted && ph) seenLock.add(ph); return lockStarted && ph === 'error' ? x : null; }, 40000, 250);
+ok(s && /mp_freezetime/.test(s.arena.workshop.error) && !seenLock.has('ready'), 'freezetime баталгаажихгүй бол Ready биш Алдаа: ' + (s && s.arena.workshop.error));
+await fetch(CTL + '/lock-freeze?v=0');
+r = await cmd(A, 'aim_rematch', { size: 1, weapon: 'm4a4', rounds: 13 }); ok(r.s === 200, 'алдааны дараа «Дахин тоглох» боломжтой');
+ok(!!await until(async () => { const x = await get(A); return x.arena.workshop.phase === 'ready' ? x : null; }, 30000), 'засагдсаны дараа Бэлэн');
+await cmd(A, 'aim_stop', { map: 'mirage' }); await cmdDone(A, 'aim_stop');
+c = await cs2(); ok(c.map === 'de_mirage' && c.autostart === 1 && c.cv.mp_winlimit === '0' && c.cv.mp_freezetime === '7' && c.logHttp.length === 0, 'Competitive сэргээлт (MatchZy autostart, convar, log)');
+
 /* ===================== 10. RCON аюулгүй байдал ===================== */
 const all = fs.readFileSync(rconLog, 'utf8').split('\n').filter(l => /^\d+ /.test(l) && !/ #/.test(l)).map(l => l.replace(/^\d+ /, ''));
-const badCmd = all.filter(l => /;|\bquit\b|\bexec\b|rcon_password|sv_password|\bexit\b/.test(l) || !/^[\w .:"\-/]+$/.test(l));
+const badCmd = all.filter(l => /;|\bquit\b|\bexec\b|rcon_password|sv_password|\bexit\b/.test(l) || !/^[\w .:"\-/]+$/.test(l) || (/^logaddress/.test(l) && !/^logaddress_(add|del)_http "http:\/\/127\.0\.0\.1:\d+\/cs2log\/[0-9a-f]{24}"$/.test(l)));
 ok(badCmd.length === 0, `agent-ийн илгээсэн ${all.length} RCON команд бүгд allowlist-ийн хэлбэртэй` + (badCmd.length ? ': ' + badCmd.join(' | ') : ''));
 const hw = all.filter(l => l.startsWith('host_workshop_map')); ok(hw.length >= 2 && hw.every(l => l === 'host_workshop_map 3469339086'), 'host_workshop_map зөвхөн allowlist-ийн ID-аар');
 const logs = fs.readFileSync(agentLog, 'utf8') + fs.readFileSync(agentLog + '.2', 'utf8');
