@@ -17,7 +17,7 @@ namespace BerxLauncher.Core
         static readonly Regex[] Patterns =
         {
             new Regex(@"(?i)\b(PrivateKey|PresharedKey)(\s*=\s*)\S+"),
-            new Regex(@"(?i)\b(rcon_password|sv_password)(\s+)(""[^""]*""|\S+)"),
+            new Regex(@"\b(rcon_password|sv_password)(\s+)(""[^""]*""|\S+)"),   // server.cfg синтакс (жижиг үсэг)
             new Regex(@"\b(SERVER_AGENT_SECRET|RCON_PASSWORD|SUPABASE_SECRET_KEY|SERVER_PASSWORD)(\s*=\s*)\S+"),
             new Regex(@"(?i)(Authorization:\s*Bearer)(\s+)\S+"),
             new Regex(@"(?i)(;\s*password)(\s+)\S+"), // "connect ip; password xxx"
