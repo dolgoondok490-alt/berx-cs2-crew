@@ -286,7 +286,7 @@ async function runCommand(c) {
 async function api(pathname, body) {
   const r = await fetch(CFG.site + '/api/server/agent/' + pathname, {
     method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + CFG.secret, 'Content-Type': 'application/json', 'User-Agent': 'berx-agent/' + VERSION },
-    body: body ? JSON.stringify(body) : undefined
+    body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(15000)
   });
   if (r.status === 401) throw new Error('Сайт agent-ийг танихгүй байна — SERVER_AGENT_SECRET Vercel дээрхтэй таарахгүй байна');
   if (!r.ok) throw new Error('Сайт ' + r.status);
@@ -328,7 +328,18 @@ async function tick() {
 log(`BERX Agent v${VERSION} → ${CFG.site}`);
 log(`RCON ${CFG.rconHost}:${CFG.rconPort} · public: ${CFG.publicAddress || '(тохируулаагүй)'} · CS2_DIR: ${CFG.cs2Dir || '(тохируулаагүй)'}`);
 tick(); setInterval(tick, CFG.pollMs);
-const bye = async () => { log('Зогсож байна...'); state.online = false; state.players = []; try { await heartbeat(); } catch (e) { /* ignore */ } process.exit(0); };
+let stopping = false;
+const bye = async () => {
+  if (stopping) return; stopping = true;
+  log('Зогсож байна... (сайтад offline илгээнэ)'); state.online = false; state.players = [];
+  try { await Promise.race([heartbeat(), new Promise(r => setTimeout(r, 5000))]); } catch (e) { /* ignore */ }
+  process.exit(0);
+};
 process.on('SIGINT', bye); process.on('SIGTERM', bye);
+
+/* BERX ARENA Launcher-ийн аюулгүй зогсоох дохио: agent хавтсанд ".berx-stop" файл үүсвэл зогсоно */
+const STOP_FILE = process.env.BERX_AGENT_STOP_FILE || path.join(__dirname, '.berx-stop');
+try { fs.unlinkSync(STOP_FILE); } catch (e) { /* хуучин дохио */ }
+setInterval(() => { if (fs.existsSync(STOP_FILE)) { try { fs.unlinkSync(STOP_FILE); } catch (e) { /* ignore */ } log('Launcher-ээс зогсоох дохио ирлээ'); bye(); } }, 1000).unref();
 
 module.exports = { Rcon, HANDLERS, steam64, normTeam };

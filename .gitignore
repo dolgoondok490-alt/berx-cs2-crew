@@ -5,3 +5,8 @@ node_modules/
 .vercel
 .DS_Store
 agent/.env
+agent/.berx-stop
+launcher/dist/
+launcher/**/bin/
+launcher/**/obj/
+launcher/shots/

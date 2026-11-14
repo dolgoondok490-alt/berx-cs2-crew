@@ -1,0 +1,33 @@
+name: BERX ARENA Launcher
+on:
+  push:
+    paths: ['launcher/**', 'agent/berx-agent.js', '.github/workflows/launcher.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build-test:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/setup-dotnet@v4
+        with: { dotnet-version: 8.0.x }
+      - name: Unit + Windows end-to-end tests
+        run: dotnet test launcher/tests/BerxLauncher.Tests -c Release --nologo --logger "console;verbosity=normal"
+      - name: Build EXE
+        shell: pwsh
+        run: ./launcher/build.ps1 -NoTest
+      - name: UI end-to-end (EXE, screenshots)
+        shell: pwsh
+        run: ./launcher/tests/ui-e2e.ps1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: BERX-ARENA-Launcher
+          path: |
+            launcher/dist/BERX ARENA Launcher.exe
+            launcher/shots/*.png
+          if-no-files-found: warn
