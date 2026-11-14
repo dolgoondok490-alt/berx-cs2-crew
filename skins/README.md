@@ -59,6 +59,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 ## 4. Идэвхжүүлэх (ЭРСДЭЛ хүлээн зөвшөөрсний дараа)
 1. `COMPATIBILITY.md`-ийн "Valve-ийн дүрэм ба эрсдэл" хэсгийг уншина.
 2. `.\03-stage-plugin.ps1` — build-472 + MenuManager 1.4.1, PlayerSettings 0.9.4, AnyBaseLib 0.9.4 татаж `C:\berx-skins\staging`-д бэлтгэнэ, SHA256 хэвлэнэ, game хавтастай зөрчил шалгана.
+   Staging нь `game\csgo`-тэй ижил бүтэцтэй: `payload\addons\counterstrikesharp\{plugins,shared,gamedata,configs}\...`. Archive бүрт заавал байх файлыг (`WeaponPaints.dll`, `gamedata\weaponpaints.json`, `MenuManagerCore`, `MenuManagerApi`, `PlayerSettings`, `PlayerSettingsApi`, `AnyBaseLib`) шалгаж, дутуу эсвэл буруу байрлалтай бол зогсоно. Дахин ажиллуулахад хуучин staging бүрэн цэвэрлэгдэнэ, 04-ийн `WeaponPaints.json` хадгалагдана. Regression тест: `tests\skins\stage-layout.ps1`.
 3. **Launcher-ээр серверээ STOP** (скриптүүд серверийг унтраахгүй/асаахгүй).
 4. `.\05-install-plugin.ps1 -IUnderstandValveGsltRisk` — нөөцлөөд зөвхөн ШИНЭ файл хуулна (CSS core, Metamod, MatchZy-д хүрэхгүй), `BERX-SKINS` гэж бичиж баталгаажуулна.
    WeaponPaints бүрэн ажиллахад `FollowCS2ServerGuidelines=false` хэрэгтэй: тусдаа `-AlsoDisableServerGuidelines` + `DISABLE-GUIDELINES` баталгаажуулалт.

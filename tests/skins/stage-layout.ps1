@@ -48,7 +48,7 @@ $zA = New-TestZip (Join-Path $fx 'a.zip') @{
   'addons/counterstrikesharp/gamedata/weaponpaints.json' = '{"g":1}' }
 $pl = Join-Path $WorkRoot 'p1'
 $r = Add-ZipToPayload $zA $pl (Join-Path $WorkRoot 'x-a') @('plugins\WeaponPaints\WeaponPaints.dll', 'gamedata\weaponpaints.json')
-$files = Rel-Files $pl
+$files = @(Rel-Files $pl)
 Check 'a: gamedata → addons\counterstrikesharp\gamedata\weaponpaints.json' ($files -contains 'addons\counterstrikesharp\gamedata\weaponpaints.json') ($files -join ', ')
 Check 'a: plugin → addons\counterstrikesharp\plugins\WeaponPaints\' ($files -contains 'addons\counterstrikesharp\plugins\WeaponPaints\WeaponPaints.deps.json')
 Check 'a: буруу addons\gamedata / addons\plugins үүсээгүй (regression)' (-not ($files | Where-Object { $_ -match '^addons\\(gamedata|plugins|shared|configs)\\' })) ($files -join ', ')
@@ -61,7 +61,7 @@ $zD = New-TestZip (Join-Path $fx 'd.zip') @{ 'counterstrikesharp/plugins/D/D.dll
 $rb = Add-ZipToPayload $zB $pl (Join-Path $WorkRoot 'x-b') @('shared\BApi\BApi.dll')
 $rc = Add-ZipToPayload $zC $pl (Join-Path $WorkRoot 'x-c') @('plugins\C\C.dll', 'shared\CApi\CApi.dll')
 $null = Add-ZipToPayload $zD $pl (Join-Path $WorkRoot 'x-d') @('plugins\D\D.dll')
-$files = Rel-Files $pl
+$files = @(Rel-Files $pl)
 foreach ($e in 'shared\BApi\BApi.dll', 'plugins\C\C.dll', 'shared\CApi\CApi.dll', 'plugins\D\D.dll') {
   Check "b/c/d: addons\counterstrikesharp\$e" ($files -contains "addons\counterstrikesharp\$e") }
 Check 'b/c: README/LICENSE staging-д ороогүй (ignored)' (($rb.Ignored -contains 'Pkg-1.0\README.md') -and ($rc.Ignored -contains 'LICENSE') -and -not ($files | Where-Object { $_ -match 'README|LICENSE' }))
@@ -74,7 +74,7 @@ $zE = New-TestZip (Join-Path $fx 'e.zip') @{
   'addons/counterstrikesharp/plugins/E/E.dll' = 'e' }
 $pe = Join-Path $WorkRoot 'p-e'
 $re = Add-ZipToPayload $zE $pe (Join-Path $WorkRoot 'x-e') @('plugins\E\E.dll')
-$fe = Rel-Files $pe
+$fe = @(Rel-Files $pe)
 Check 'e: зөвхөн plugins\E staging хийгдсэн' (($fe.Count -eq 1) -and $fe[0] -eq 'addons\counterstrikesharp\plugins\E\E.dll') ($fe -join ', ')
 Check 'e: metamod/api/dotnet/MatchZy ignored' ($re.Ignored.Count -eq 4) ($re.Ignored -join ', ')
 
