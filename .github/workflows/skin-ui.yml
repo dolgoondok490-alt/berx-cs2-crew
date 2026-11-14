@@ -1,0 +1,70 @@
+name: BERX SKIN INVENTORY UI v2
+on:
+  push:
+    branches: ['skin-ui-v2', 'main']
+    paths: ['js/**', 'css/**', 'index.html', 'assets/**', 'lib/**', 'agent/**', 'server/**', 'tests/skins/**', 'tools/build-weapon-assets.py', '.github/workflows/skin-ui.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Syntax check
+        run: for f in js/pages/*.js js/app.js js/services/*.js js/ui/*.js lib/*.js; do node --check "$f" || exit 1; done
+      - name: Catalog + default weapon images
+        run: |
+          node -e "
+            const fs=require('fs'); const c=JSON.parse(fs.readFileSync('assets/data/skins-catalog.json'));
+            const ids=new Set(c.items.map(i=>i.id)); if (ids.size!==c.items.length) throw new Error('duplicate item id');
+            const miss=c.weapons.filter(w=>w.c!=='gloves'&&!fs.existsSync('assets/weapons/'+w.w+'.webp')).map(w=>w.w);
+            for (const f of ['weapon_knife','gloves','agent']) if(!fs.existsSync('assets/weapons/'+f+'.webp')) miss.push(f);
+            for (const k of ['knives','gloves','rifles','snipers','pistols','smgs','heavy','agents']) if(!fs.existsSync('assets/weapons/icons/'+k+'.png')) miss.push('icon '+k);
+            if (miss.length) throw new Error('missing: '+miss); console.log(c.items.length+' items, '+c.weapons.length+' weapons, all default images + 8 icons present');"
+      - name: Install Playwright (Chromium)
+        run: |
+          npm install --no-save --no-audit --no-fund --prefix /tmp/pw playwright@1.49.1
+          /tmp/pw/node_modules/.bin/playwright install --with-deps chromium
+      - name: Skin Inventory UI (desktop / tablet / mobile, save/load API, T/CT, knife/gloves/agents, Steam images)
+        env: { PLAYWRIGHT: /tmp/pw/node_modules/playwright, CHECK_REMOTE_IMAGES: '1', SHOTS: /tmp/shots }
+        run: node tests/skins/ui.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: skin-ui-screenshots, path: /tmp/shots, retention-days: 7 }
+
+  sync-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - db: mariadb:11.4
+            health: healthcheck.sh --connect --innodb_initialized
+          - db: mysql:8.4
+            health: mysqladmin ping -h 127.0.0.1 -proot
+    services:
+      db:
+        image: ${{ matrix.db }}
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MYSQL_ROOT_PASSWORD: root
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="${{ matrix.health }}" --health-interval=5s --health-timeout=5s --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Install agent optional dependency (mysql2)
+        working-directory: agent
+        run: npm install --no-audit --no-fund
+      - name: Agent sync unit tests
+        run: node tests/skins/unit.mjs
+      - name: Skin Sync end-to-end (site + agent + ${{ matrix.db }})
+        env: { MYSQL_HOST: 127.0.0.1, MYSQL_PORT: 3306, MYSQL_ROOT_PASSWORD: root }
+        run: node tests/skins/e2e.mjs
