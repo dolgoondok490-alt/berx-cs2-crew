@@ -33,8 +33,29 @@ $pluginCred = New-DbCredential $BERX.DbPluginUser $pluginPw; $agentCred = New-Db
 Invoke-Mysql $pluginCred $schema $db | Out-Null
 $tables = Invoke-Mysql $agentCred "SHOW TABLES" $db
 Ok "Хүснэгтүүд: $($tables -join ', ')"
-$denied = $false; try { Invoke-Mysql $agentCred "DROP TABLE wp_player_pins" $db | Out-Null } catch { $denied = $_.Exception.Message -match 'denied' }
-if ($denied) { Ok "$($BERX.DbAgentUser) DROP хийж чадахгүй (хамгийн бага эрх)" } else { Bad "$($BERX.DbAgentUser) хэт их эрхтэй байна!"; exit 1 }
+foreach ($hostName in @('localhost', '127.0.0.1')) {
+    $grants = @(Invoke-MySql $rootCred "SHOW GRANTS FOR 'berx_agent'@'$hostName'")
+
+    $target = '`berx_agent`@`{0}`' -f $hostName
+
+    $usage = '^GRANT USAGE ON \*\.\* TO ' +
+        [regex]::Escape($target) +
+        "(?: IDENTIFIED BY PASSWORD '[^']+')?$"
+
+    $expected = 'GRANT SELECT, INSERT, UPDATE, DELETE ON `berx_weaponpaints`.* TO {0}' -f $target
+
+    $usageRows = @($grants | Where-Object { $_ -cmatch $usage })
+
+    if (
+        $grants.Count -ne 2 -or
+        $usageRows.Count -ne 1 -or
+        $grants -cnotcontains $expected
+    ) {
+        throw "Unexpected database privileges for berx_agent@$hostName"
+    }
+
+    Ok "berx_agent@$hostName permissions OK"
+}
 
 Step 'Тохиргооны файлууд'
 $cfgDir = Join-Path $BERX.StagingDir 'payload\addons\counterstrikesharp\configs\plugins\WeaponPaints'
@@ -68,3 +89,4 @@ SKINS_REFRESH=1
 }
 $rootCred = $null
 Write-Host "`nНууц үгс: $secretsFile (зөвхөн таны хэрэглэгч уншина). Дараагийн алхам: 07-verify-schema.ps1" -ForegroundColor Cyan
+
