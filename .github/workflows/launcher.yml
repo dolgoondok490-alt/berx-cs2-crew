@@ -31,3 +31,15 @@ jobs:
             launcher/dist/BERX ARENA Launcher.exe
             launcher/shots/*.png
           if-no-files-found: warn
+      - name: Export build for review (base64 in log)
+        if: success()
+        shell: pwsh
+        run: |
+          $files = @('launcher/dist/BERX ARENA Launcher.exe') + (Get-ChildItem launcher/shots/*.png | ForEach-Object FullName)
+          foreach ($f in $files) {
+            $b = [Convert]::ToBase64String([IO.File]::ReadAllBytes($f))
+            $h = (Get-FileHash $f -Algorithm SHA256).Hash
+            Write-Host "@@BEGIN $(Split-Path $f -Leaf) $h"
+            for ($i = 0; $i -lt $b.Length; $i += 4000) { Write-Host ("@@" + $b.Substring($i, [Math]::Min(4000, $b.Length - $i))) }
+            Write-Host "@@END"
+          }
