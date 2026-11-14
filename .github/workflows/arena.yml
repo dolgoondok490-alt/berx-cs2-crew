@@ -1,8 +1,8 @@
 name: BERX ARENA server + Workshop/AIM
 on:
   push:
-    branches: ['workshop-aim', 'main']
-    paths: ['lib/**', 'agent/**', 'server/**', 'js/**', 'css/**', 'tests/server/**', 'tests/skins/fake-supabase.js', '.github/workflows/arena.yml']
+    branches: ['workshop-aim', 'main', 'stats-fix']
+    paths: ['lib/**', 'agent/**', 'server/**', 'js/**', 'css/**', 'tests/server/**', 'tests/skins/fake-supabase.js', 'tests/stats/**', '.github/workflows/arena.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -24,3 +24,5 @@ jobs:
         run: node tests/server/arena.mjs
       - name: Skin Inventory unit tests (agent v1.3.0)
         run: node tests/skins/unit.mjs
+      - name: Statistics sync guard (key-less Preview must not overwrite stored stats)
+        run: node tests/stats/sync-guard.mjs
