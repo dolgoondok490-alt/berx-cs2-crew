@@ -66,7 +66,10 @@ const RESTORE_DEFAULTS = {
   mp_free_armor: '0', mp_death_drop_gun: '1', mp_death_drop_grenade: '2', mp_death_drop_defuser: '1', mp_give_player_c4: '1',
   mp_ct_default_primary: '', mp_t_default_primary: '', mp_ct_default_secondary: 'weapon_hkp2000', mp_t_default_secondary: 'weapon_glock',
   mp_ct_default_grenades: '', mp_t_default_grenades: '', mp_weapons_allow_map_placed: '0', mp_match_end_restart: '0', mp_match_restart_delay: '15',
-  mp_respawn_on_death_ct: '0', mp_respawn_on_death_t: '0', sv_infinite_ammo: '0', mp_winlimit: '0', mp_equipment_reset_rounds: '0'
+  mp_respawn_on_death_ct: '0', mp_respawn_on_death_t: '0', sv_infinite_ammo: '0', mp_winlimit: '0', mp_equipment_reset_rounds: '0',
+  // Workshop map өөрөө (point_servercommand) өөрчилдөг convar-ууд — AIM-аас гарахад өмнөх утга руу нь сэргээнэ.
+  // null = анхдагч утга тодорхойгүй: snapshot уншиж чадсан үед л сэргээнэ.
+  mp_timelimit: '0', bot_dont_shoot: '0', sv_disable_immunity_alpha: '0', mp_respawn_immunitytime: null, mp_warmup_online_enabled: null
 };
 const SNAPSHOT_CVARS = Object.keys(RESTORE_DEFAULTS);
 const q = (v) => (v === '' ? '""' : v);
@@ -87,7 +90,7 @@ function aimConfig(s, opts = {}) {
     'mp_free_armor 2', 'mp_death_drop_gun 0', 'mp_death_drop_grenade 0', 'mp_death_drop_defuser 0', 'mp_give_player_c4 0',
     `mp_ct_default_primary ${w}`, `mp_t_default_primary ${w}`, 'mp_ct_default_secondary weapon_usp_silencer', 'mp_t_default_secondary weapon_glock',
     'mp_ct_default_grenades ""', 'mp_t_default_grenades ""', 'mp_weapons_allow_map_placed 0', 'mp_equipment_reset_rounds 1',
-    'mp_respawn_on_death_ct 0', 'mp_respawn_on_death_t 0', 'sv_infinite_ammo 0',
+    'mp_respawn_on_death_ct 0', 'mp_respawn_on_death_t 0', 'sv_infinite_ammo 0', 'mp_timelimit 0',
     'mp_match_end_restart 1', 'mp_match_restart_delay 30',   // дуусахад ӨӨР map руу шилжихгүй; 30с үр дүн харуулаад ижил тохиргоогоор дахин эхэлнэ
     ...(opts.restart === false ? [] : ['mp_restartgame 1'])   // тоглолтын дундах засварт (MatchZy/cfg дарж бичсэн) оноог тэглэхгүй
   ];
@@ -96,14 +99,28 @@ function aimConfig(s, opts = {}) {
 const aimExpect = (s, opts = {}) => ({
   required: { mp_freezetime: '0', mp_round_restart_delay: '1', mp_autoteambalance: '0', mp_limitteams: '0', bot_quota: '0', mp_buytime: '0',
     mp_ct_default_primary: WEAPONS[s.weapon], mp_t_default_primary: WEAPONS[s.weapon], mp_halftime: '0', mp_overtime_enable: '0',
+    mp_ct_default_secondary: 'weapon_usp_silencer', mp_t_default_secondary: 'weapon_glock', sv_cheats: '0', mp_timelimit: '0',
     mp_maxrounds: String(opts.winlimit === false ? 2 * s.rounds - 1 : 4 * s.rounds - 1) },
   optional: { ...(opts.winlimit === false ? {} : { mp_winlimit: String(s.rounds) }), mp_equipment_reset_rounds: '1' }
 });
 
+// Map-ын өөрийн тохиргооноос хамгаалах (round guard): Workshop map logic_auto → point_servercommand-оор
+// map ачаалах, mp_restartgame болон (CS2 entity-г round бүр дахин үүсгэдэг тул) round бүрийн эхэнд
+// sv_cheats 1, AK/Deagle, mp_maxrounds 200, mp_round_restart_delay 1.5 г.м. тавьж болно. CS2-д
+// sv_allow_point_servercommand байхгүй (server.dll-д шалгасан) тул map-ын командыг хориглох боломжгүй —
+// оронд нь Round_Start/Match_Start log мөр бүрийн дараа AIM convar-уудыг оноог тэглэхгүйгээр дахин тогтооно.
+// sv_cheats 0 хамгийн түрүүнд. bot_kick / mp_warmup_end / mp_restartgame орохгүй.
+function aimGuard(s, opts = {}) {
+  return aimConfig(s, { ...opts, restart: false }).filter(c => !['bot_kick', 'mp_warmup_end'].includes(c));
+}
+// Guard-ын дараах хоёр дахь шалгалт: map хожуу ажилласан эсэхийг эдгээрээр шалгана
+const GUARD_CHECK = ['sv_cheats', 'mp_round_restart_delay', 'mp_t_default_primary', 'mp_t_default_secondary', 'mp_maxrounds', 'mp_timelimit'];
+
 /* ---------- CS2 server log (logaddress_add_http → agent, зөвхөн 127.0.0.1) ----------
  *  Team "CT" triggered "SFUI_Notice_CTs_Win" (CT "5") (T "3")   → round-ын оноо
  *  World triggered "Match_Start" / "Game_Commencing"            → оноо 0:0
- *  Game Over: competitive ... score 10:7 after 3 min             → тоглолт дууссан */
+ *  Game Over: competitive ... score 10:7 after 3 min             → тоглолт дууссан
+ *  World triggered "Round_Start"                                 → round эхэлсэн (map-ын тохиргооноос хамгаалах guard) */
 function parseLogLine(line) {
   const t = String(line || '');
   let m = t.match(/Team "(CT|TERRORIST)" triggered "([^"]+)" \(CT "(\d+)"\) \(T "(\d+)"\)/);
@@ -111,6 +128,7 @@ function parseLogLine(line) {
   m = t.match(/Game Over:.*?score (\d+):(\d+)/);
   if (m || /Game Over:/.test(t)) return { type: 'gameover', a: m ? +m[1] : null, b: m ? +m[2] : null };
   if (/World triggered "(Match_Start|Game_Commencing)"/.test(t)) return { type: 'restart' };
+  if (/World triggered "Round_Start"/.test(t)) return { type: 'roundstart' };
   return null;
 }
 // Тоглолтын дүн: N-д хүрсэн баг ялна. N-д хэн ч хүрээгүй бол (жишээ нь хүчээр зогсоосон) ялагчгүй.
@@ -136,13 +154,19 @@ async function readSnapshot(exec) {
   const values = {}, fallback = [];
   for (const c of SNAPSHOT_CVARS) {
     const v = parseCvar(await exec(c).catch(() => ''), c);
-    if (v === null) { values[c] = RESTORE_DEFAULTS[c]; fallback.push(c); } else values[c] = v;
+    if (v !== null) values[c] = v;
+    else if (RESTORE_DEFAULTS[c] !== null) { values[c] = RESTORE_DEFAULTS[c]; fallback.push(c); }
+    // анхдагч нь null бол сэргээхгүй (таамаг утга тавихгүй)
   }
   return { values, fallback, takenAt: Date.now() };
 }
 function restoreCommands(snapshot) {
   const v = (snapshot && snapshot.values) || RESTORE_DEFAULTS;
-  return SNAPSHOT_CVARS.map(c => `${c} ${q(/^[\w.\-]{0,64}$/.test(v[c] ?? '') ? (v[c] ?? '') : RESTORE_DEFAULTS[c])}`);
+  return SNAPSHOT_CVARS.flatMap(c => {
+    // Хуучин agent-ийн snapshot-д байхгүй шинэ convar → competitive анхдагч (null бол алгасна)
+    const val = (v[c] !== undefined && v[c] !== null && /^[\w.\-]{0,64}$/.test(v[c])) ? v[c] : RESTORE_DEFAULTS[c];
+    return val === null || val === undefined ? [] : [`${c} ${q(val)}`];
+  });
 }
 
 // MatchZy-ийн анхны autostart горим: cfg/MatchZy/config.cfg (+ config_override.cfg) — зөвхөн уншина
@@ -175,12 +199,14 @@ function workshopFiles(cs2Dir, id, fsx = fs) {
   const list = (dir) => { try { return fsx.readdirSync(dir).filter(f => /\.vpk$/i.test(f)); } catch (e) { return []; } };
   const exists = (dir) => { try { return fsx.existsSync(dir); } catch (e) { return false; } };
   const vpks = d.content.flatMap(list);
-  // .vpk-ийн нэр нь ихэвчлэн серверийн бодит map нэр (жишээ нь aim_map_d.vpk) — catalog-д нэмэлт баталгаа болгон ашиглана
-  const names = [...new Set(vpks.map(f => f.replace(/\.vpk$/i, '').replace(/_dir$/i, '').toLowerCase()).filter(n => MAPNAME_RE.test(n) && n !== String(id)))];
+  // Workshop-ын .vpk файл ихэвчлэн <id>.vpk эсвэл <id>_dir.vpk + <id>_000.vpk гэж нэрлэгддэг (бодит серверт шалгасан) —
+  // map нэр биш. Өөр нэртэй .vpk (жишээ нь aim_x.vpk) байвал л нэмэлт нэр болгоно; үндсэн баталгаа нь catalog-ийн mapNames.
+  const idNames = new RegExp('^' + String(id) + '(_dir|_\\d{3})?$');
+  const names = [...new Set(vpks.map(f => f.replace(/\.vpk$/i, '').replace(/_dir$/i, '').toLowerCase()).filter(n => MAPNAME_RE.test(n) && !idNames.test(n)))];
   return { installed: vpks.length > 0, downloading: d.downloads.some(exists), names };
 }
 
-// Сервер мэдээлсэн map нэр энэ workshop map мөн эсэх: "aim_map", "workshop/3469339086/aim_map" г.м.
+// Сервер мэдээлсэн map нэр энэ workshop map мөн эсэх: "aim_map1v1cfg", "workshop/3418431100/aim_map1v1cfg" г.м.
 function isOnMap(serverMap, entry, extraNames = []) {
   if (!serverMap || !entry) return false;
   const s = String(serverMap).toLowerCase().replace(/\\/g, '/');
@@ -223,6 +249,6 @@ function workshopCommandError(out) {
 
 module.exports = {
   WEAPONS, WEAPON_LABELS, WEAPON_DEF, SIZES, ROUNDS, PHASES, SNAPSHOT_CVARS, RESTORE_DEFAULTS, DOWNLOAD_TIMEOUT_MS, LOAD_TIMEOUT_MS,
-  validateCatalog, loadCatalog, aimSettings, aimConfig, aimExpect, parseCvar, readSnapshot, restoreCommands, parseLogLine, resultOf,
+  validateCatalog, loadCatalog, aimSettings, aimConfig, aimExpect, aimGuard, GUARD_CHECK, parseCvar, readSnapshot, restoreCommands, parseLogLine, resultOf,
   readMatchzyAutostart, workshopDirs, workshopFiles, isOnMap, nextPhase, workshopCommandError
 };

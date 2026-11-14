@@ -1,7 +1,7 @@
 name: BERX ARENA server + Workshop/AIM
 on:
   push:
-    branches: ['workshop-aim', 'main', 'stats-fix']
+    branches: ['workshop-aim', 'main', 'stats-fix', 'workshop-map-replace']
     paths: ['lib/**', 'agent/**', 'server/**', 'js/**', 'css/**', 'tests/server/**', 'tests/skins/fake-supabase.js', 'tests/stats/**', '.github/workflows/arena.yml']
   workflow_dispatch:
 permissions:

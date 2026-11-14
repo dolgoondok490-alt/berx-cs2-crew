@@ -2,13 +2,18 @@
 //   • convar унших ("name" → "name = value") ба тавих ("name value")
 //   • host_workshop_map: анх татахад сервер DOWNLOAD_MS хугацаанд ХАРИУ ӨГӨХГҮЙ (бодит CS2 шиг), steamapps\workshop\...-д .vpk үүсгэнэ
 //   • map ачаалагдсаны дараа 1с-д MatchZy: autostart 0 → sleep.cfg, 1 → warmup.cfg (AIM тохиргоог дарж бичих эрсдэлийг шалгана)
-//   • HTTP control (127.0.0.1:<ctl>): /state, /fail-next, /exec-sleep, /players
+//   • Workshop map-ын өөрийн point_servercommand (fixtures/aim_map1v1cfg-entities.json — бодит map-аас задалсан):
+//     map ачаалах / mp_restartgame → OnMapSpawn + OnNewGame (sv_cheats 1, AK/Deagle, maxrounds 200 ...), round бүр → OnMapSpawn.
+//     Round бүрийн эхэнд тоглогчийн авах зэвсэг (spawn) ба round дуусахад хэрэглэсэн restart delay-г бүртгэнэ.
+//   • HTTP control (127.0.0.1:<ctl>): /state, /fail-next, /exec-sleep, /players, /map-every-round
 // node fake-cs2.js <rconPort> <password> <logFile> <ctlPort> <cs2Dir> [downloadMs]
 'use strict';
 const net = require('net'), fs = require('fs'), path = require('path'), http = require('http');
 const [port, pass, logFile, ctlPort, cs2Dir, dlMsArg] = process.argv.slice(2);
 const DOWNLOAD_MS = +dlMsArg || 6000;
-const WORKSHOP = { '3469339086': 'aim_map_d' };   // бодит CS2 сервер: Workshop aim_map → runtime map нэр aim_map_d
+const MAPFIX = require('./fixtures/aim_map1v1cfg-entities.json');
+const WORKSHOP = { [MAPFIX.workshopId]: MAPFIX.mapName };   // бодит Workshop файлаас шалгасан runtime map нэр
+const MAP_LOGIC = { [MAPFIX.mapName]: MAPFIX };
 const steamapps = path.resolve(cs2Dir, '..', '..');
 
 const cv = {
@@ -19,15 +24,48 @@ const cv = {
   mp_ct_default_primary: '', mp_t_default_primary: '', mp_ct_default_secondary: 'weapon_hkp2000', mp_t_default_secondary: 'weapon_glock',
   mp_ct_default_grenades: '', mp_t_default_grenades: '', mp_weapons_allow_map_placed: '0', mp_match_end_restart: '0', mp_match_restart_delay: '15',
   mp_respawn_on_death_ct: '0', mp_respawn_on_death_t: '0', sv_infinite_ammo: '0', mp_friendlyfire: '0', mp_warmup_pausetimer: '0',
-  mp_winlimit: '0', mp_equipment_reset_rounds: '0'
+  mp_winlimit: '0', mp_equipment_reset_rounds: '0',
+  mp_timelimit: '0', bot_dont_shoot: '0', sv_disable_immunity_alpha: '0', mp_respawn_immunitytime: '4', mp_warmup_online_enabled: '1'
 };
 const S = { map: 'de_mirage', autostart: 1, busyUntil: 0, failNext: false, sleepAt: [], configLog: [], restarts: 0,
   logOn: false, logHttp: [], score: { ct: 0, t: 0 }, played: 0, over: false, noWinlimit: false, lockFreeze: false, gameOvers: 0,
+  mapCmds: 0, everyRound: false, spawns: [], roundEnds: [], cheatsOnAt: null, cheatsWindows: [],
   players: [{ userid: 2, name: 'DOK', steamid64: '76561198000000001', team: 3 }, { userid: 3, name: 'BOT Abe', steamid64: '0', team: 2, bot: true }] };
 const log = (t) => fs.appendFileSync(logFile, `${Date.now()} ${t}\n`);
+// convar тавих (agent ба map хоёулаа) — sv_cheats 1 байсан хугацааг хэмжинэ
+function setCv(k, v) {
+  if (k === 'sv_cheats') {
+    if (v === '1' && cv.sv_cheats !== '1') S.cheatsOnAt = Date.now();
+    if (v !== '1' && cv.sv_cheats === '1' && S.cheatsOnAt) { S.cheatsWindows.push({ at: S.cheatsOnAt, ms: Date.now() - S.cheatsOnAt }); S.cheatsOnAt = null; }
+  }
+  cv[k] = v;
+}
+// Map-ын point_servercommand: entity spawn-аас ~200ms дараа (logic_auto)
+function fireMapLogic(kind) {
+  const m = MAP_LOGIC[S.map]; if (!m) return;
+  const map = S.map;
+  setTimeout(() => {
+    if (S.map !== map) return;
+    const cmds = [...m.onMapSpawn, ...((kind !== 'round' || S.everyRound) ? [...m.onNewGame, ...m.onNewGameRelay] : [])];
+    for (const c of cmds) {
+      const [k, ...rest] = c.split(' '); const v = rest.join(' ');
+      S.mapCmds++; log('#MAPCMD ' + c);
+      if (k === 'game_alias' && v === 'custom') { setCv('game_type', '3'); setCv('game_mode', '0'); }
+      else if (k === 'mp_freezetime' && S.lockFreeze) continue;   // "түгжсэн" тохиргоо map-д ч хамаарна
+      else if (Object.prototype.hasOwnProperty.call(cv, k)) setCv(k, v);
+    }
+  }, 200);
+}
+// Шинэ round эхлэх: тоглогч тухайн үеийн convar-аар зэвсэг авна, дараа нь map-ын entity дахин spawn болно
+function roundStart(kind) {
+  S.spawns.push({ at: Date.now(), primary: cv.mp_t_default_primary, ctPrimary: cv.mp_ct_default_primary, secondary: cv.mp_t_default_secondary, ctSecondary: cv.mp_ct_default_secondary, cheats: cv.sv_cheats });
+  emit(['World triggered "Round_Start"']);
+  fireMapLogic(kind);
+}
 
 function loadMap(m) {
   S.map = m; S.mapLoadedAt = Date.now(); log(`#MAPLOAD ${m}`);
+  fireMapLogic('load');
   // MatchZy OnMapStart → 1с дараа AutoStart (0 = sleep.cfg, 1 = warmup)
   setTimeout(() => {
     if (S.autostart === 0) { Object.assign(cv, { mp_maxrounds: '24', mp_freezetime: '15', mp_ct_default_primary: '', mp_t_default_primary: '', mp_autoteambalance: '1', mp_limitteams: '1', bot_quota: '0' }); S.sleepAt.push(Date.now()); log('#MATCHZY sleep.cfg'); }
@@ -44,14 +82,16 @@ function emit(lines) {
 function playRound(winner) {
   if (S.over) return;
   S.played++;
+  S.roundEnds.push({ at: Date.now(), delay: cv.mp_round_restart_delay, maxrounds: cv.mp_maxrounds, timelimit: cv.mp_timelimit });
   if (winner === 'CT' || winner === 'T') S.score[winner === 'CT' ? 'ct' : 't']++;
   if (winner === 'CT' || winner === 'T') emit([`Team "${winner === 'CT' ? 'CT' : 'TERRORIST'}" triggered "SFUI_Notice_${winner === 'CT' ? 'CTs' : 'Terrorists'}_Win" (CT "${S.score.ct}") (T "${S.score.t}")`]);
   else emit(['World triggered "SFUI_Notice_Round_Draw"']);
   const wl = +cv.mp_winlimit, mr = +cv.mp_maxrounds, half = Math.floor(mr / 2);
   const end = (wl > 0 && (S.score.ct >= wl || S.score.t >= wl)) || S.played >= mr || (+cv.mp_match_can_clinch && (S.score.ct > half || S.score.t > half));
   if (end) { S.over = true; S.gameOvers++; emit([`Game Over: competitive mg_active ${S.map} score ${S.score.ct}:${S.score.t} after 3 min`]); }
+  else roundStart('round');
 }
-function restartGame() { S.score = { ct: 0, t: 0 }; S.played = 0; S.over = false; emit(['World triggered "Match_Start" on "' + S.map + '"']); }
+function restartGame() { S.score = { ct: 0, t: 0 }; S.played = 0; S.over = false; emit(['World triggered "Match_Start" on "' + S.map + '"']); roundStart('restart'); }
 function run(body) {
   log(body);
   const c = body.trim(), w = c.split(/\s+/);
@@ -64,11 +104,12 @@ function run(body) {
     if (S.failNext) { S.failNext = false; return `Failed to download workshop item ${w[1]}`; }
     const mapName = WORKSHOP[w[1]]; if (!mapName) return `Failed to download workshop item ${w[1]}`;
     const content = path.join(steamapps, 'workshop', 'content', '730', w[1]), dl = path.join(steamapps, 'workshop', 'downloads', '730', w[1]);
-    const have = fs.existsSync(path.join(content, w[1] + '.vpk'));
+    // Dedicated server (SteamCMD) дээрх бодит файлын бүтэц: <id>_dir.vpk + <id>_000.vpk (map нэр файлын нэрэнд байхгүй)
+    const have = fs.existsSync(path.join(content, w[1] + '_dir.vpk'));
     const ms = have ? 300 : DOWNLOAD_MS;
     S.busyUntil = Date.now() + ms;            // сервер энэ хугацаанд RCON-д хариу өгөхгүй
     if (!have) fs.mkdirSync(dl, { recursive: true });
-    setTimeout(() => { fs.mkdirSync(content, { recursive: true }); fs.writeFileSync(path.join(content, w[1] + '.vpk'), 'vpk'); fs.rmSync(dl, { recursive: true, force: true }); loadMap(mapName); }, ms - 100);
+    setTimeout(() => { fs.mkdirSync(content, { recursive: true }); fs.writeFileSync(path.join(content, w[1] + '_dir.vpk'), 'vpk'); fs.writeFileSync(path.join(content, w[1] + '_000.vpk'), 'vpk'); fs.rmSync(dl, { recursive: true, force: true }); loadMap(mapName); }, ms - 100);
     return '';
   }
   if (w[0] === 'matchzy_autostart_mode') { if (w[1] !== undefined) S.autostart = +w[1]; return ''; }
@@ -86,7 +127,7 @@ function run(body) {
   if (/^\w+$/.test(c) && Object.prototype.hasOwnProperty.call(cv, c)) return `${c} = ${cv[c]}`;
   if (w.length >= 2 && Object.prototype.hasOwnProperty.call(cv, w[0])) {
     let v = c.slice(w[0].length).trim(); if (v.startsWith('"')) v = v.slice(1, v.lastIndexOf('"'));
-    cv[w[0]] = v; S.configLog.push({ t: Date.now(), k: w[0], v }); return '';
+    setCv(w[0], v); S.configLog.push({ t: Date.now(), k: w[0], v }); return '';
   }
   return '';
 }
@@ -114,8 +155,10 @@ http.createServer((req, res) => {
   if (u.pathname === '/rounds') { for (const x of (u.searchParams.get('seq') || '').split(',')) playRound(x); }
   if (u.pathname === '/no-winlimit') S.noWinlimit = u.searchParams.get('v') !== '0';
   if (u.pathname === '/lock-freeze') { S.lockFreeze = u.searchParams.get('v') !== '0'; if (S.lockFreeze) cv.mp_freezetime = '15'; }
+  if (u.pathname === '/map-every-round') S.everyRound = u.searchParams.get('v') !== '0';
   if (u.pathname === '/exec-sleep') { Object.assign(cv, { mp_maxrounds: '24', mp_freezetime: '15', mp_ct_default_primary: '', mp_t_default_primary: '' }); log('#MATCHZY sleep.cfg (manual)'); }
   res.writeHead(200, { 'content-type': 'application/json' });
   res.end(JSON.stringify({ map: S.map, autostart: S.autostart, busy: Date.now() < S.busyUntil, cv, sleepAt: S.sleepAt, restarts: S.restarts, configLog: S.configLog.slice(-200), players: S.players,
-    logOn: S.logOn, logHttp: S.logHttp, score: S.score, played: S.played, over: S.over, gameOvers: S.gameOvers }));
+    logOn: S.logOn, logHttp: S.logHttp, score: S.score, played: S.played, over: S.over, gameOvers: S.gameOvers,
+    mapCmds: S.mapCmds, spawns: S.spawns.slice(-60), roundEnds: S.roundEnds.slice(-60), cheatsWindows: S.cheatsWindows.slice(-200), cheatsOnAt: S.cheatsOnAt }));
 }).listen(+ctlPort, '127.0.0.1');
