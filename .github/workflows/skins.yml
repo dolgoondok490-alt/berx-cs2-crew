@@ -74,3 +74,19 @@ jobs:
           ./skins/windows/05-install-plugin.ps1; if ($LASTEXITCODE -ne 1) { exit 1 }; Write-Host 'PASS install refused without -IUnderstandValveGsltRisk'
           if (Test-Path C:\berx-skins) { Write-Host 'FAIL: refused install created files'; exit 1 }
           $global:LASTEXITCODE = 0
+      - name: Staging layout regression — Windows PowerShell 5.1 (real release ZIPs)
+        shell: powershell
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          ./tests/skins/stage-layout.ps1 -WorkRoot "$env:RUNNER_TEMP\stage-ps51"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if (Test-Path C:\berx-skins) { Write-Host 'FAIL: test touched C:\berx-skins'; exit 1 }
+      - name: Staging layout regression — PowerShell 7 (real release ZIPs)
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          ./tests/skins/stage-layout.ps1 -WorkRoot "$env:RUNNER_TEMP\stage-ps7"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          if (Test-Path C:\berx-skins) { Write-Host 'FAIL: test touched C:\berx-skins'; exit 1 }

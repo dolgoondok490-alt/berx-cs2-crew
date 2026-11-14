@@ -19,34 +19,24 @@ if (-not $IUnderstandValveGsltRisk) {
 $srv = Get-ServerProcess
 if ($srv) { Bad "CS2 сервер ажиллаж байна (PID $($srv.ProcessId)). BERX ARENA Launcher-ээр өөрөө STOP хийгээд дахин ажиллуулна уу. Энэ скрипт серверийг унтраахгүй."; exit 1 }
 $payload = Join-Path $BERX.StagingDir 'payload'
-if (-not (Test-Path (Join-Path $payload 'addons\counterstrikesharp\plugins\WeaponPaints\WeaponPaints.dll'))) { Bad 'Staging алга — 03-stage-plugin.ps1'; exit 1 }
 if (-not (Test-Path (Join-Path $payload 'addons\counterstrikesharp\configs\plugins\WeaponPaints\WeaponPaints.json'))) { Bad 'WeaponPaints.json staging-д алга — 04-configure-db.ps1'; exit 1 }
+# 03-ийн засагдсан бүтэц (addons\counterstrikesharp\...) ба бүх шаардлагатай файлыг дахин шалгана — буруу бол юу ч хуулахгүй
+$problems = @(Test-StagedPayload $payload)
+if ($problems) { foreach ($p in $problems) { Bad $p }; Bad 'Staging бүтэц буруу/дутуу — 03-stage-plugin.ps1-ийг дахин ажиллуулна уу'; exit 1 }
+$plan = @(Get-StagePlan $payload $BERX.CsgoDir)
+$blocked = @($plan | Where-Object { $_.protected -or $_.state -eq 'overwrite' })
+if ($blocked) { foreach ($b in $blocked) { Bad "Хамгаалагдсан эсвэл одоо байгаа өөр файл: $($b.path)" }; Info 'Зөрчлийг гараар шийдээд (эсвэл 99-rollback) дахин ажиллуулна уу.'; exit 1 }
+Ok "$(@($plan | Where-Object state -eq 'new').Count) файл нэмэгдэнэ → $($BERX.CssDir)"
 
 Confirm-Typed 'BERX-SKINS' "Та BERX ARENA сервер дээр WeaponPaints суулгах гэж байна.`nValve-ийн Steam Support: тоглогчийн эзэмшдэггүй item/хутга өгдөг сервер GSLT ban авч болно (operator-ийн матчмейкинг/арилжаа түр хязгаарлагдана)."
 
 Step 'Нөөц'
 $stamp = & "$PSScriptRoot\01-backup.ps1" | Select-Object -Last 1
 
-Step 'Хуулах төлөвлөгөө'
-$added = @(); $skipped = @()
-foreach ($f in Get-ChildItem $payload -Recurse -File) {
-  $rel = $f.FullName.Substring($payload.Length + 1)
-  if ($rel -match '^addons\\(metamod|counterstrikesharp\\(api|bin|dotnet)|counterstrikesharp\\plugins\\MatchZy)') { Bad "Хамгаалагдсан зам: $rel — зогслоо"; exit 1 }
-  $target = Join-Path $BERX.CsgoDir $rel
-  if (Test-Path $target) {
-    if ((Get-FileHash $target).Hash -eq (Get-FileHash $f.FullName).Hash) { $skipped += $rel; continue }
-    Bad "Одоо байгаа файлыг дарж бичихгүй: $rel"; Info 'Зөрчлийг гараар шийдээд (эсвэл 99-rollback) дахин ажиллуулна уу.'; exit 1
-  }
-  $added += $rel
-}
-Ok "$($added.Count) файл нэмнэ, $($skipped.Count) ижил тул алгасна"
-
-Step 'Хуулж байна'
-foreach ($rel in $added) {
-  $target = Join-Path $BERX.CsgoDir $rel
-  New-Item -ItemType Directory -Force (Split-Path $target) | Out-Null
-  Copy-Item (Join-Path $payload $rel) $target
-}
+Step 'Хуулж байна (зөвхөн шинэ файл)'
+try { $res = Install-StagedPayload $payload $BERX.CsgoDir } catch { Bad $_.Exception.Message; exit 1 }
+$added = $res.Added
+Ok "$($added.Count) файл нэмэгдлээ, $($res.Skipped.Count) ижил тул алгаслаа"
 [ordered]@{ installedAt = (Get-Date).ToString('s'); backup = "$stamp.zip"; weaponPaints = $BERX.WeaponPaintsTag; files = $added; guidelinesChanged = $false } |
   ConvertTo-Json -Depth 3 | Set-Content $BERX.Manifest -Encoding UTF8
 Ok "Суулгалаа. Manifest: $($BERX.Manifest)"
