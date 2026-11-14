@@ -50,24 +50,24 @@ ok((await fetch(B + '/server/state')).status === 401, 'нэвтрээгүй /ser
 let s = await get(K);
 ok(s.configured === true && s.online === false && !s.server && !s.connect, 'agent-гүй: Offline, хуурамч өгөгдөлгүй');
 ok(!('commands' in s), 'admin биш хэрэглэгч командын түүх харахгүй');
-ok(s.catalog && s.catalog.workshop.some(m => m.id === 'aim_map' && m.workshopId === '3469339086') && s.catalog.competitive.length === 7, 'catalog: 7 competitive + aim_map (Workshop 3469339086)');
+ok(s.catalog && s.catalog.workshop.some(m => m.id === 'aim_map1v1cfg' && m.workshopId === '3418431100') && s.catalog.competitive.length === 7, 'catalog: 7 competitive + aim_map1v1cfg (Workshop 3418431100)');
 ok(s.arena === null, 'agent-гүй үед Workshop/AIM төлөв харуулахгүй');
 for (const [h, exp] of [[{}, 401], [{ Authorization: 'Bearer wrong' }, 401], [{ Authorization: 'Bearer ' + SECRET.slice(0, -1) + 'z' }, 401]]) ok((await fetch(B + '/server/agent/poll', { headers: h })).status === exp, 'agent poll буруу нууц → ' + exp);
-for (const [t, p] of [['server.cmd', { type: 'changemap', args: { map: 'nuke' } }], ['server.cmd', { type: 'aim_start', args: { map: 'aim_map', size: 1, weapon: 'ak47', rounds: 10 } }], ['server.shuffle', {}], ['server.move', { userId: K.id, team: 'CT' }]]) {
+for (const [t, p] of [['server.cmd', { type: 'changemap', args: { map: 'nuke' } }], ['server.cmd', { type: 'aim_start', args: { map: 'aim_map1v1cfg', size: 1, weapon: 'ak47', rounds: 10 } }], ['server.shuffle', {}], ['server.move', { userId: K.id, team: 'CT' }]]) {
   const r = await act(K, t, p); ok(r.s >= 400, `admin биш ${t}${p.type ? ' ' + p.type : ''} → ${r.s} (${r.j.error})`);
 }
 ok((await act(N, 'server.join', { team: 'CT' })).s >= 400, 'Steam ID-гүй CT-д орохгүй');
-ok((await act(K, 'server.vote', { map: 'inferno' })).s === 200 && (await act(K, 'server.vote', { map: 'aim_map' })).s >= 400, 'санал: competitive map OK, aim_map/буруу map татгалзана');
+ok((await act(K, 'server.vote', { map: 'inferno' })).s === 200 && (await act(K, 'server.vote', { map: 'aim_map1v1cfg' })).s >= 400, 'санал: competitive map OK, aim_map1v1cfg/буруу map татгалзана');
 for (const [p, exp] of [[{ type: 'rcon', args: { cmd: 'quit' } }, false], [{ type: 'roundtime', args: { value: 999 } }, false], [{ type: 'kick', args: { steamId: 'abc; quit' } }, false],
-  [{ type: 'aim_start', args: { map: 'aim_map', size: 3, weapon: 'ak47', rounds: 10 } }, false], [{ type: 'aim_start', args: { map: 'aim_map', size: 1, weapon: 'negev', rounds: 10 } }, false],
-  [{ type: 'aim_start', args: { map: 'aim_map', size: 1, weapon: 'ak47', rounds: 11 } }, false], [{ type: 'aim_start', args: { map: '3469339086', size: 1, weapon: 'ak47', rounds: 10 } }, false],
+  [{ type: 'aim_start', args: { map: 'aim_map1v1cfg', size: 3, weapon: 'ak47', rounds: 10 } }, false], [{ type: 'aim_start', args: { map: 'aim_map1v1cfg', size: 1, weapon: 'negev', rounds: 10 } }, false],
+  [{ type: 'aim_start', args: { map: 'aim_map1v1cfg', size: 1, weapon: 'ak47', rounds: 11 } }, false], [{ type: 'aim_start', args: { map: '3418431100', size: 1, weapon: 'ak47', rounds: 10 } }, false],
   [{ type: 'workshop_map', args: { map: '123456789' } }, false], [{ type: 'aim_rematch', args: { size: 1, weapon: 'ak47', rounds: 10 } }, false]]) {
   const r = await cmd(A, p.type, p.args); ok((r.s === 200) === exp, `admin ${p.type} ${JSON.stringify(p.args)} → ${r.s} ${r.j.error || ''}`);
 }
 ok(!JSON.stringify(await get(A)).includes(RCON_PW) && !JSON.stringify(await get(A)).includes(SECRET), 'state-д RCON/agent нууц байхгүй');
 
 /* ===================== 2. Agent асаах ===================== */
-console.log('\n== Agent v1.3.0');
+console.log('\n== Agent v1.3.2');
 const ARENA_STATE = path.join(tmp, 'arena-state.json');
 const agentEnv = { BERX_AGENT_ENV: path.join(tmp, 'agent.env'), BERX_ARENA_STATE: ARENA_STATE, ARENA_VERIFY_MS: '5000', ARENA_CONFIG_TIMEOUT_MS: '12000' };
 fs.writeFileSync(path.join(tmp, 'agent.env'), `BERX_URL=http://127.0.0.1:${sitePort}\nSERVER_AGENT_SECRET=${SECRET}\nRCON_HOST=127.0.0.1\nRCON_PORT=${rconPort}\nRCON_PASSWORD=${RCON_PW}\nEVENTS_PORT=${evPort}\nPOLL_MS=2000\nPUBLIC_ADDRESS=203.0.113.5:27015\nCS2_DIR=${CS2}\n`);
@@ -75,7 +75,7 @@ const agentLog = path.join(tmp, 'agent.log');
 let agent = run([path.join(ROOT, 'agent/berx-agent.js')], agentEnv, agentLog);
 s = await until(async () => { const x = await get(A); return x.online && x.arena ? x : null; }, 20000);
 ok(!!s, 'agent холбогдож online + Workshop/AIM төлөв илгээнэ');
-ok(s && s.server.map === 'de_mirage' && s.server.matchzy === true && s.arena.mode === 'competitive' && s.arena.installed.aim_map === false && s.arena.agentCatalog.includes('aim_map'), 'эхний төлөв: competitive, aim_map серверт татагдаагүй');
+ok(s && s.server.map === 'de_mirage' && s.server.matchzy === true && s.arena.mode === 'competitive' && s.arena.installed.aim_map1v1cfg === false && s.arena.agentCatalog.includes('aim_map1v1cfg'), 'эхний төлөв: competitive, aim_map1v1cfg серверт татагдаагүй');
 ok(s && s.connect && s.connect.command.includes('203.0.113.5:27015'), 'connect команд');
 // pre-AIM: админ тохиргоо (snapshot-д ороод сэргээгдэх ёстой)
 for (const [t, a] of [['freezetime', { value: 7 }], ['maxrounds', { value: 30 }], ['roundtime', { value: 3 }]]) { await cmd(A, t, a); }
@@ -85,14 +85,14 @@ const before = (await cs2()).cv;
 ok(before.mp_freezetime === '7' && before.mp_maxrounds === '30', 'competitive тохиргоо: freezetime 7, maxrounds 30, roundtime 3');
 
 /* ===================== 3. Workshop татах + AIM эхлүүлэх ===================== */
-console.log('\n== aim_start: aim_map 1v1 AWP first to 10');
-let r = await cmd(A, 'aim_start', { map: 'aim_map', size: 1, weapon: 'awp', rounds: 10 });
+console.log('\n== aim_start: aim_map1v1cfg 1v1 AWP first to 10');
+let r = await cmd(A, 'aim_start', { map: 'aim_map1v1cfg', size: 1, weapon: 'awp', rounds: 10 });
 ok(r.s === 200, 'admin aim_start дараалалд орлоо');
 const seen = new Set(); let premature = null, sawBusyOnline = false;
 const fin = await until(async () => {
   const st = await get(A), c = await cs2(), w = st.arena && st.arena.workshop;
   if (w) seen.add(w.phase);
-  if (w && w.phase === 'ready' && !(c.map === 'aim_map_d' && c.cv.mp_ct_default_primary === 'weapon_awp' && c.cv.mp_winlimit === '10' && c.cv.mp_freezetime === '0' && c.cv.mp_round_restart_delay === '1')) premature = { phase: w.phase, map: c.map, cv: c.cv.mp_ct_default_primary };
+  if (w && w.phase === 'ready' && !(c.map === 'aim_map1v1cfg' && c.cv.mp_ct_default_primary === 'weapon_awp' && c.cv.mp_winlimit === '10' && c.cv.mp_freezetime === '0' && c.cv.mp_round_restart_delay === '1')) premature = { phase: w.phase, map: c.map, cv: c.cv.mp_ct_default_primary };
   if (c.busy && w && w.phase === 'downloading') sawBusyOnline = true;
   return w && ['ready', 'error'].includes(w.phase) ? st : null;
 }, 60000, 300);
@@ -102,8 +102,8 @@ ok(sawBusyOnline, 'сервер татаж байх үед (RCON хариугү�
 ok(seen.has('configuring') || seen.has('loading'), 'ачаалах/тохируулах үе шат харагдсан');
 ok(premature === null, 'map ачаалагдаж, AIM тохиргоо батлагдахаас ӨМНӨ "Бэлэн" гэж хэзээ ч мэдээлээгүй ' + JSON.stringify(premature));
 let c = await cs2();
-ok(c.map === 'aim_map_d' && fin.server.map === 'aim_map_d', 'бодит runtime map нэр aim_map_d — зөв танигдсан (regression: өмнө 3 мин дараа алдаа өгдөг байсан)');
-ok(fin.arena.workshop.runtimeMap === 'aim_map_d', 'сайт: runtime map aim_map_d харагдана');
+ok(c.map === 'aim_map1v1cfg' && fin.server.map === 'aim_map1v1cfg', 'бодит runtime map нэр aim_map1v1cfg (Workshop файлаас шалгасан) — зөв танигдсан');
+ok(fin.arena.workshop.runtimeMap === 'aim_map1v1cfg', 'сайт: runtime map aim_map1v1cfg харагдана');
 ok(c.autostart === 0 && c.restarts >= 1, 'MatchZy: css_restart + matchzy_autostart_mode 0 (унтсан)');
 ok(c.cv.mp_freezetime === '0' && c.cv.mp_round_restart_delay === '1', 'readback: freezetime 0, round restart delay 1с');
 ok(c.cv.mp_winlimit === '10' && c.cv.mp_maxrounds === '39' && c.cv.mp_overtime_enable === '0' && c.cv.mp_halftime === '0', 'First to 10: mp_winlimit 10 (draw round-д тэсвэртэй), maxrounds хязгаар болохгүй (39), overtime/тал солих байхгүй');
@@ -113,14 +113,45 @@ ok(c.logOn && c.logHttp.length === 1 && /^http:\/\/127\.0\.0\.1:\d+\/cs2log\/[0-
 ok(!c.players.some(p => p.bot), 'bot kick хийгдсэн');
 const lines = fs.readFileSync(rconLog, 'utf8').split('\n');
 const idx = (re) => lines.findIndex(l => re.test(l));
-ok(idx(/ css_restart$/) < idx(/ matchzy_autostart_mode 0$/) && idx(/ matchzy_autostart_mode 0$/) < idx(/ host_workshop_map 3469339086$/), 'дараалал: css_restart → autostart 0 → host_workshop_map');
+ok(idx(/ css_restart$/) < idx(/ matchzy_autostart_mode 0$/) && idx(/ matchzy_autostart_mode 0$/) < idx(/ host_workshop_map 3418431100$/), 'дараалал: css_restart → autostart 0 → host_workshop_map');
 const sleepAt = c.sleepAt[c.sleepAt.length - 1], awpAt = c.configLog.filter(x => x.k === 'mp_ct_default_primary' && x.v === 'weapon_awp').map(x => x.t).pop();
 ok(sleepAt && awpAt && awpAt > sleepAt, 'AIM тохиргоо MatchZy sleep.cfg-ийн ДАРАА хэрэгжсэн (дарагдаагүй)');
-ok(fin.server.mode === 'aim' && fin.arena.aim && fin.arena.aim.weapon === 'awp' && fin.arena.installed.aim_map === true, 'сайт: AIM идэвхтэй, aim_map серверт татагдсан');
-ok(fs.existsSync(path.join(tmp, 'steamcmd', 'steamapps', 'workshop', 'content', '730', '3469339086', '3469339086.vpk')), 'Workshop .vpk SteamCMD steamapps\\workshop\\content\\730-д');
+ok(fin.server.mode === 'aim' && fin.arena.aim && fin.arena.aim.weapon === 'awp' && fin.arena.installed.aim_map1v1cfg === true, 'сайт: AIM идэвхтэй, aim_map1v1cfg серверт татагдсан');
+ok(fs.existsSync(path.join(tmp, 'steamcmd', 'steamapps', 'workshop', 'content', '730', '3418431100', '3418431100_dir.vpk')), 'Workshop .vpk SteamCMD steamapps\\workshop\\content\\730-д');
 const snapFile = JSON.parse(fs.readFileSync(ARENA_STATE, 'utf8'));
 ok(snapFile.snapshot && snapFile.snapshot.values.mp_freezetime === '7' && snapFile.snapshot.values.mp_maxrounds === '30' && snapFile.matchzyAutostart === 1, 'өмнөх тохиргоо (snapshot) + MatchZy autostart=1 хадгалагдсан');
 ok(!JSON.stringify(snapFile).includes(RCON_PW) && !JSON.stringify(snapFile).includes(SECRET), 'arena төлөвийн файлд нууц мэдээлэл алга');
+
+/* ===================== 3b. Map-ын өөрийн тохиргоо (point_servercommand) AIM-ийг дарж бичихгүй ===================== */
+console.log('\n== Aim_map1v1cfg-ийн built-in тохиргоо');
+{
+  const rl = fs.readFileSync(rconLog, 'utf8').split('\n');
+  const lastRestart = rl.map((l, i) => (/ mp_restartgame 1$/.test(l) ? i : -1)).filter(i => i >= 0).pop();
+  const mapAfter = rl.slice(lastRestart).filter(l => / #MAPCMD /.test(l)).map(l => l.replace(/^\d+ #MAPCMD /, ''));
+  ok(['sv_cheats 1', 'mp_t_default_primary weapon_ak47', 'mp_t_default_secondary weapon_deagle', 'mp_round_restart_delay 1.5', 'mp_maxrounds 200', 'mp_timelimit 60'].every(x => mapAfter.includes(x)),
+    'map өөрөө AIM тохиргооны (mp_restartgame) ДАРАА sv_cheats 1, AK/Deagle, delay 1.5, maxrounds 200, timelimit 60 тавьсан');
+  const settled = await until(async () => { const v = (await cs2()).cv; return v.sv_cheats === '0' && v.mp_round_restart_delay === '1' && v.mp_t_default_primary === 'weapon_awp' && v.mp_ct_default_primary === 'weapon_awp' &&
+    v.mp_ct_default_secondary === 'weapon_usp_silencer' && v.mp_t_default_secondary === 'weapon_glock' && v.mp_maxrounds === '39' && v.mp_winlimit === '10' && v.mp_timelimit === '0' && v.mp_startmoney === '0' && v.mp_freezetime === '0'; }, 8000, 200);
+  ok(!!settled, 'agent guard: sv_cheats 0, delay 1с, AWP, USP/Glock, First to 10, timelimit 0, мөнгө 0 — map-ын утгыг дарсан');
+  // Хамгийн муу тохиолдол: map БҮХ командаа round бүр давтана
+  await fetch(CTL + '/map-every-round?v=1');
+  const rgCount = () => fs.readFileSync(rconLog, 'utf8').split('\n').filter(l => / mp_restartgame 1$/.test(l)).length;
+  const rg0 = rgCount(), t0 = Date.now();
+  for (const w of ['CT', 'T', 'CT', 'T', 'CT']) { await fetch(CTL + '/round?w=' + w); await sleep(1800); }
+  const st = await cs2();
+  const sp = st.spawns.filter(x => x.at >= t0), re = st.roundEnds.filter(x => x.at >= t0), win = st.cheatsWindows.filter(x => x.at >= t0);
+  ok(sp.length === 5 && sp.every(x => x.primary === 'weapon_awp' && x.ctPrimary === 'weapon_awp' && x.secondary === 'weapon_glock' && x.ctSecondary === 'weapon_usp_silencer' && x.cheats === '0'),
+    'round бүр тоглогч сонгосон AWP + USP/Glock-оор spawn хийсэн (map-ын AK/Deagle биш): ' + sp.map(x => x.primary.replace('weapon_', '') + '/' + x.secondary.replace('weapon_', '')).join(' '));
+  ok(re.length === 5 && re.every(x => x.delay === '1' && x.maxrounds === '39' && x.timelimit === '0'), 'round бүрийн төгсгөлд restart delay 1с, maxrounds 39, timelimit 0 (map-ын 1.5 / 200 / 60 биш)');
+  ok(win.length >= 5 && win.every(x => x.ms < 1500) && !st.cheatsOnAt, `map-ын sv_cheats 1-ийг agent ${win.length ? Math.max(...win.map(x => x.ms)) : '?'}ms дотор 0 болгосон (${win.length} удаа)`);
+  ok(rgCount() === rg0 && st.score.ct === 3 && st.score.t === 2, 'guard тоглолтыг дахин эхлүүлээгүй — оноо 3:2 хэвээр');
+  ok(!!await until(async () => { const x = await get(A); return x.server.score && x.server.score.ct === 3 && x.server.score.t === 2 && x.arena.workshop.phase === 'ready' ? x : null; }, 8000), 'сайт: live оноо 3:2, төлөв Бэлэн хэвээр');
+  await fetch(CTL + '/map-every-round?v=0');
+  r = await cmd(A, 'aim_rematch', { size: 1, weapon: 'awp', rounds: 10 });
+  const rd = await cmdDone(A, 'aim_rematch'); ok(rd && rd.status === 'done', 'Rematch (map OnNewGame дахин ажиллана)');
+  ok(!!await until(async () => { const x = await get(A); return x.arena.workshop.phase === 'ready' && x.server.score && x.server.score.ct === 0 && x.server.score.t === 0 ? x : null; }, 20000), 'Rematch: Бэлэн, оноо 0:0');
+  ok(!!await until(async () => { const v = (await cs2()).cv; return v.sv_cheats === '0' && v.mp_t_default_primary === 'weapon_awp' && v.mp_t_default_secondary === 'weapon_glock' && v.mp_maxrounds === '39' && v.mp_round_restart_delay === '1'; }, 5000, 200), 'Rematch-ийн дараа map-ын OnNewGame-ийг дарж AIM тохиргоо тогтсон');
+}
 
 /* ===================== 4. AIM-ийн үеийн хамгаалалт ===================== */
 console.log('\n== AIM үеийн хамгаалалт');
@@ -144,7 +175,7 @@ r = await cmd(A, 'aim_rematch', { size: 2, weapon: 'm4a1s', rounds: 16 }); ok(r.
 let done = await cmdDone(A, 'aim_rematch'); ok(done && done.status === 'done', 'aim_rematch done: ' + (done && done.output));
 ok(!!await until(async () => { const x = await get(A); return x.arena.workshop.phase === 'ready' && x.arena.aim.size === 2 ? x : null; }, 20000), 'дахин бэлэн, 2v2');
 c = await cs2();
-ok(c.cv.mp_winlimit === '16' && c.cv.mp_ct_default_primary === 'weapon_m4a1_silencer' && c.map === 'aim_map_d', 'first to 16, M4A1-S, map солигдоогүй');
+ok(c.cv.mp_winlimit === '16' && c.cv.mp_ct_default_primary === 'weapon_m4a1_silencer' && c.map === 'aim_map1v1cfg', 'first to 16, M4A1-S, map солигдоогүй');
 ok(fs.readFileSync(rconLog, 'utf8').split('\n').filter(l => / mp_restartgame 1$/.test(l)).length >= 2, 'mp_restartgame 1 — тоглолт дахин эхэлсэн');
 ok((await get(K)).cap.CT === 2 && (await act(A, 'server.join', { team: 'CT' })).s === 200, '2v2: CT-д 2 дахь хүн орж болно');
 
@@ -200,7 +231,7 @@ ok(fs.readFileSync(serverCfg, 'utf8') === serverCfgBefore, 'server.cfg өөрч�
 
 /* ===================== 8. AIM → changemap: мөн сэргээнэ, 2 дахь удаа татахгүй ===================== */
 console.log('\n== дахин AIM (татагдсан) → changemap nuke');
-await cmd(A, 'aim_start', { map: 'aim_map', size: 1, weapon: 'ak47', rounds: 13 });
+await cmd(A, 'aim_start', { map: 'aim_map1v1cfg', size: 1, weapon: 'ak47', rounds: 13 });
 const t1 = Date.now(); const seen2 = new Set();
 const fin2 = await until(async () => { const x = await get(A); if (x.arena && x.arena.workshop) seen2.add(x.arena.workshop.phase); return x.arena && x.arena.workshop && x.arena.workshop.phase === 'ready' && x.arena.aim && x.arena.aim.rounds === 13 ? x : null; }, 30000, 300);
 ok(!!fin2 && !seen2.has('downloading'), `татагдсан map дахин татахгүй (${Math.round((Date.now() - t1) / 1000)}с, ${[...seen2].join(' → ')})`);
@@ -212,7 +243,7 @@ ok(done && done.status === 'done' && /сэргээлээ/.test(done.output) && c
 /* ===================== 9. Workshop алдаа — success гэж хэзээ ч хэлэхгүй ===================== */
 console.log('\n== Workshop алдаа');
 await fetch(CTL + '/fail-next');
-r = await cmd(A, 'aim_start', { map: 'aim_map', size: 1, weapon: 'ak47', rounds: 10 }); ok(r.s === 200, 'aim_start (алдаа гаргах) дараалалд ' + (r.j.error || ''));
+r = await cmd(A, 'aim_start', { map: 'aim_map1v1cfg', size: 1, weapon: 'ak47', rounds: 10 }); ok(r.s === 200, 'aim_start (алдаа гаргах) дараалалд ' + (r.j.error || ''));
 done = await cmdDone(A, 'aim_start');
 s = (await until(async () => { const x = await get(A); return x.arena.workshop && x.arena.workshop.phase === 'error' ? x : null; }, 10000)) || await get(A);
 ok(done && done.status === 'failed' && /ачаалагдсангүй/.test(done.output), 'host_workshop_map алдаа → команд failed: ' + (done && done.output));
@@ -223,7 +254,7 @@ c = await cs2(); ok(c.map === 'de_mirage' && c.autostart === 1 && c.cv.mp_freeze
 /* ===================== 9b. mp_winlimit дэмжигдэхгүй сервер → 2N-1 fallback (анхааруулгатай) ===================== */
 console.log('\n== winlimit fallback / тохиргоо баталгаажаагүй');
 await fetch(CTL + '/no-winlimit?v=1');
-await cmd(A, 'aim_start', { map: 'aim_map', size: 1, weapon: 'm4a4', rounds: 13 });
+await cmd(A, 'aim_start', { map: 'aim_map1v1cfg', size: 1, weapon: 'm4a4', rounds: 13 });
 s = await until(async () => { const x = await get(A); return x.arena.workshop && ['ready', 'error'].includes(x.arena.workshop.phase) && x.arena.aim && x.arena.aim.rounds === 13 ? x : null; }, 40000);
 c = await cs2();
 ok(s && s.arena.workshop.phase === 'ready' && c.cv.mp_maxrounds === '25' && c.cv.mp_match_can_clinch === '1' && s.arena.aim.winlimit === false && /mp_winlimit/.test(s.arena.workshop.warning || ''), 'mp_winlimit-гүй сервер: First to 13 = maxrounds 25 + clinch, анхааруулга харагдана');
@@ -245,7 +276,7 @@ c = await cs2(); ok(c.map === 'de_mirage' && c.autostart === 1 && c.cv.mp_winlim
 const all = fs.readFileSync(rconLog, 'utf8').split('\n').filter(l => /^\d+ /.test(l) && !/ #/.test(l)).map(l => l.replace(/^\d+ /, ''));
 const badCmd = all.filter(l => /;|\bquit\b|\bexec\b|rcon_password|sv_password|\bexit\b/.test(l) || !/^[\w .:"\-/]+$/.test(l) || (/^logaddress/.test(l) && !/^logaddress_(add|del)_http "http:\/\/127\.0\.0\.1:\d+\/cs2log\/[0-9a-f]{24}"$/.test(l)));
 ok(badCmd.length === 0, `agent-ийн илгээсэн ${all.length} RCON команд бүгд allowlist-ийн хэлбэртэй` + (badCmd.length ? ': ' + badCmd.join(' | ') : ''));
-const hw = all.filter(l => l.startsWith('host_workshop_map')); ok(hw.length >= 2 && hw.every(l => l === 'host_workshop_map 3469339086'), 'host_workshop_map зөвхөн allowlist-ийн ID-аар');
+const hw = all.filter(l => l.startsWith('host_workshop_map')); ok(hw.length >= 2 && hw.every(l => l === 'host_workshop_map 3418431100'), 'host_workshop_map зөвхөн allowlist-ийн ID-аар');
 const logs = fs.readFileSync(agentLog, 'utf8') + fs.readFileSync(agentLog + '.2', 'utf8');
 ok(!logs.includes(RCON_PW) && !logs.includes(SECRET), 'agent log-д нууц үг/secret алга');
 

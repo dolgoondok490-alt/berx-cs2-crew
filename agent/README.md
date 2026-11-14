@@ -98,7 +98,7 @@ CS2_DIR=C:\cs2-server
 (`agent\.env`, `agent\.env.skins`-д хүрэхгүй). Шинэ тохиргоо шаардахгүй — `CS2_DIR` аль хэдийн тохируулсан байх ёстой
 (Workshop татагдсан эсэхийг `...\steamapps\workshop\content\730\<id>`-ээс шалгана).
 
-* **AIM / 1V1** табаас admin: map (aim_map), 1v1/2v2, AK-47/M4A4/M4A1-S/AWP, First to 10/13/16 → «AIM эхлүүлэх».
+* **AIM / 1V1** табаас admin: map (Aim_map1v1cfg, Workshop 3418431100), 1v1/2v2, AK-47/M4A4/M4A1-S/AWP, First to 10/13/16/30/60 → «AIM эхлүүлэх».
 * Agent: одоогийн convar-уудыг `agent\.berx-arena-state.json`-д хадгална (нууц мэдээлэлгүй) → MatchZy `css_restart` +
   `matchzy_autostart_mode 0` (унтуулна) → `host_workshop_map <allowlist ID>` → сервер map-аа мэдээлсний дараа AIM тохиргоо
   (bot kick, team balance off, freezetime 0, `mp_maxrounds 2N-1` + clinch, зэвсэг, `mp_match_end_restart 1`) → буцааж уншиж шалгана.
@@ -111,8 +111,14 @@ CS2_DIR=C:\cs2-server
   60:59 → 60 оноотой баг ялна), тал солихгүй, overtime байхгүй. Сервер `mp_winlimit`-ийг хүлээж авахгүй бол автоматаар `mp_maxrounds 2N-1` +
   clinch (анхааруулгатай). Оноо, ялагчийг CS2 server log-оос (`logaddress_add_http` → зөвхөн 127.0.0.1-ийн agent) уншиж сайтад харуулна.
 * **Дахин тоглох** — тохиргоог (хэмжээ/зэвсэг/round) дахин хэрэгжүүлж `mp_restartgame 1` → оноо 0:0. Тоглолт дуусахад 30с үр дүн харуулаад ижил map дээр дахин эхэлнэ.
-* **Runtime map нэр:** Workshop map-ын серверт гарах нэр нь Workshop гарчгаас өөр байж болно (aim_map → `aim_map_d`). `workshop-maps.json`-ийн
-  `mapNames`-д бодит нэрийг бичнэ; agent мөн татагдсан `.vpk` файлын нэрээр нэмж танина.
+* **Runtime map нэр:** Workshop map-ын серверт гарах нэр нь Workshop гарчгаас өөр байж болно (Aim_map1v1cfg → `aim_map1v1cfg`; хуучин aim_map → `aim_map_d`).
+  Workshop-ын `.vpk` файл `<id>_dir.vpk` / `<id>_000.vpk` гэж нэрлэгддэг тул нэрийг map багцын дотроос (`maps/<нэр>.vpk`) шалгаж
+  `workshop-maps.json`-ийн `mapNames`-д бичнэ.
+* **Map-ын өөрийн тохиргоо (v1.3.2):** зарим Workshop map (жишээ нь Aim_map1v1cfg) `point_servercommand`-оор map ачаалах / `mp_restartgame` /
+  round бүрт `sv_cheats 1`, AK/Deagle, `mp_maxrounds 200`, `mp_timelimit 60`, `mp_round_restart_delay 1.5` тавьдаг. CS2-д үүнийг хориглох
+  `sv_allow_point_servercommand` байхгүй тул agent `Round_Start`/`Match_Start` log мөр бүрээс ~0.3с дараа AIM тохиргоог оноо тэглэхгүйгээр
+  дахин тогтооно (`ARENA_GUARD_MS`, анхдагч 300), 1.5с-д буцааж уншиж шалгана (`ARENA_GUARD_CHECK_MS`). Competitive руу буцахад map-ын
+  өөрчилсөн convar-ууд (`game_alias custom` → `game_type`/`game_mode`, `mp_timelimit`, `bot_dont_shoot` г.м.) мөн сэргээгдэнэ.
 * **Skin:** WeaponPaints skin-ийг тоглогчийн **тухайн үеийн багийн** (T/CT) loadout-оос авдаг. AIM-д хоёр багт ижил зэвсэг өгдөг тул зэвсгийн
   skin-ээ T ба CT хоёуланд нь сонгоно — сайтын AIM хэсэг таны тухайн зэвсгийн T/CT skin байгаа эсэхийг харуулна.
 * **AIM дуусгах** (эсвэл Competitive map «Серверт тавих», горим солих) — хадгалсан convar-ууд + MatchZy-ийн анхны

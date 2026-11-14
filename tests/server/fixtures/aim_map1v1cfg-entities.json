@@ -1,0 +1,31 @@
+{
+  "_source": "Workshop 3418431100 (Aim_map1v1cfg) — 3418431100.vpk → maps/aim_map1v1cfg.vpk → maps/aim_map1v1cfg/entities/default_ents.vents_c (KV3 v5, LZ4) задалж гаргасан point_servercommand холболтууд (2026-11-15). Map ачаалагдах ба тоглолт дахин эхлэх (mp_restartgame) үед: OnMapSpawn + OnNewGame; CS2 round бүр entity-г дахин үүсгэдэг тул OnMapSpawn round бүр давтагдаж болно.",
+  "workshopId": "3418431100",
+  "mapName": "aim_map1v1cfg",
+  "onMapSpawn": [
+    "mp_round_restart_delay 1.5",
+    "sv_disable_immunity_alpha 1",
+    "mp_respawn_immunitytime 0",
+    "mp_limitteams 0",
+    "mp_autoteambalance 0",
+    "mp_freezetime 0",
+    "mp_startmoney 121521",
+    "mp_maxmoney 121521"
+  ],
+  "onNewGame": [
+    "sv_cheats 1"
+  ],
+  "onNewGameRelay": [
+    "mp_t_default_primary weapon_ak47",
+    "mp_ct_default_primary weapon_ak47",
+    "mp_ct_default_secondary weapon_deagle",
+    "mp_t_default_secondary weapon_deagle",
+    "bot_quota 0",
+    "mp_free_armor 2",
+    "bot_dont_shoot 1",
+    "mp_maxrounds 200",
+    "mp_timelimit 60",
+    "game_alias custom",
+    "mp_warmup_online_enabled 0"
+  ]
+}

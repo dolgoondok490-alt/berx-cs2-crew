@@ -3,23 +3,22 @@
   "version": 1,
   "maps": [
     {
-      "id": "aim_map",
-      "name": "aim_map",
+      "id": "aim_map1v1cfg",
+      "name": "Aim_map1v1cfg",
       "category": "aim",
-      "workshopId": "3469339086",
+      "workshopId": "3418431100",
       "mapNames": [
-        "aim_map_d",
-        "aim_map"
+        "aim_map1v1cfg"
       ],
-      "author": "Bimmerr",
-      "sizeMB": 40.2,
+      "author": "loganburgerking",
+      "sizeMB": 25.3,
       "teamSizes": [
         1,
         2
       ],
-      "image": "https://images.steamusercontent.com/ugc/32197118127799742/9C5F223B6582031534FEDD7DA93274BEEE393844/",
-      "source": "https://steamcommunity.com/sharedfiles/filedetails/?id=3469339086",
-      "verified": "2026-11-15: Steam Workshop — Counter-Strike 2 (app 730), CS:GO aim_map-ийн CS2 port (Bimmerr), 1v1/2v2/3v3, 40.175 MB. Бодит CS2 сервер дээр runtime map нэр: aim_map_d"
+      "image": "https://images.steamusercontent.com/ugc/59211109400850510/68AFD410A45A6409B4C6F6D9EF625373D3302E4E/",
+      "source": "https://steamcommunity.com/sharedfiles/filedetails/?id=3418431100",
+      "verified": "2026-11-15: Steam Workshop — Counter-Strike 2 (app 730), loganburgerking, 25.308 MB, 2025-02-04 шинэчлэгдсэн. Runtime map нэрийг Workshop файлаас (3418431100.vpk → maps/aim_map1v1cfg.vmap_c) шалгасан: aim_map1v1cfg. Map өөрөө logic_auto→point_servercommand-оор sv_cheats 1, AK/Deagle, mp_maxrounds 200, mp_timelimit 60, mp_round_restart_delay 1.5 тавьдаг — agent round бүр AIM тохиргоог дахин тогтооно."
     }
   ]
 }

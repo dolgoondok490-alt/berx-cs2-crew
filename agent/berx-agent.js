@@ -19,7 +19,7 @@ const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 
-const VERSION = '1.3.1';
+const VERSION = '1.3.2';
 
 /* ---------- тохиргоо ---------- */
 (function loadEnv() {
@@ -93,6 +93,12 @@ class Rcon {
       const end = [...this.pending.entries()].find(([, x]) => x.endFor === id);
       if (end) { const [eid, e] = end; this.pending.delete(eid); const q = this.pending.get(e.target); if (q) { clearTimeout(q.t); this.pending.delete(e.target); q.resolve(q.chunks.join('')); } }
     }
+  }
+  // Хариу хэрэггүй convar тавих команд: хүлээхгүйгээр дараалуулан илгээнэ (exec хариу бүрийг ~120ms хүлээдэг).
+  // Сервер пакетуудыг ирсэн дарааллаар нь гүйцэтгэнэ; хариуг нь (id бүртгэлгүй) үл тооно. Нэг пакет = нэг команд.
+  send(cmd) {
+    if (!this.ready || !this.sock) return false;
+    this.sock.write(this.packet(++this.id, 2, cmd)); return true;
   }
   exec(cmd, timeout = 5000) {
     if (!this.ready || !this.sock) return Promise.reject(new Error('RCON холбогдоогүй'));
@@ -319,6 +325,9 @@ catch (e) { log('⚠ Workshop/AIM идэвхгүй: agent хавтсанд arena
 const wsEntry = (id) => CATALOG.find(m => m.id === id) || null;
 const ARENA_CONFIG_TIMEOUT_MS = Math.max(10000, +process.env.ARENA_CONFIG_TIMEOUT_MS || 60000);  // map дээр гарснаас хойш тохиргоо батлах хугацаа
 const ARENA_VERIFY_MS = Math.max(5000, +process.env.ARENA_VERIFY_MS || 30000);   // AIM тохиргоо өөрчлөгдсөн эсэхийг шалгах давтамж
+// Round guard: Round_Start/Match_Start log мөрөөс хойш map-ын өөрийн командыг (point_servercommand) дарж AIM тохиргоог дахин тогтооно
+const ARENA_GUARD_MS = Math.max(100, +process.env.ARENA_GUARD_MS || 300);
+const ARENA_GUARD_CHECK_MS = Math.max(ARENA_GUARD_MS + 200, +process.env.ARENA_GUARD_CHECK_MS || 1500);
 const ARENA_FILE = process.env.BERX_ARENA_STATE || path.join(__dirname, '.berx-arena-state.json');
 let arena = { aim: null, snapshot: null, matchzyAutostart: null, workshop: null, log: null, result: null };
 try { const saved = JSON.parse(fs.readFileSync(ARENA_FILE, 'utf8')); if (saved && typeof saved === 'object') arena = { ...arena, ...saved }; } catch (e) { /* анх удаа */ }
@@ -344,7 +353,7 @@ function stopAimLogCommands() {
 // Log мөр бүр: round-ын оноо, тоглолт дууссан, дахин эхэлсэн
 function onCs2Log(body) {
   if (!arena.aim) return;
-  let changed = false;
+  let changed = false, guard = false;
   for (const line of String(body).split(/\r?\n/)) {
     const ev = arenaLib.parseLogLine(line); if (!ev) continue;
     if (ev.type === 'round') {
@@ -354,9 +363,59 @@ function onCs2Log(body) {
     } else if (ev.type === 'gameover') {
       state.phase = 'finished'; changed = true;
       if (!arena.result) { const r = arenaLib.resultOf(state.score, arena.aim.rounds); if (r) { arena.result = { ...r, rounds: arena.aim.rounds, at: Date.now(), names: teamNames() }; saveArena(); } }
-    } else if (ev.type === 'restart') { state.score = { ct: 0, t: 0 }; state.phase = 'live'; changed = true; }
+    } else if (ev.type === 'restart') { state.score = { ct: 0, t: 0 }; state.phase = 'live'; changed = true; guard = true; }
+    else if (ev.type === 'roundstart') guard = true;
   }
+  if (guard) scheduleGuard();
   if (changed) heartbeat().catch(() => {});
+}
+// Round guard: (1) ARENA_GUARD_MS-ийн дараа AIM convar-уудыг оноо тэглэхгүйгээр дахин тавина (sv_cheats 0 эхэнд),
+// (2) ARENA_GUARD_CHECK_MS-д гол convar-уудыг буцааж уншина — map хожуу дарж бичсэн бол дахин тавина.
+// Шинэ Round_Start бүр өөрийн guard-тай (өмнөх шалгалт хүлээгдэж байсан ч алгасахгүй).
+// AIM-аас гарсан (aim_stop/changemap) бол тэр даруй зогсоно — competitive тохиргоог хэзээ ч дарж бичихгүй.
+let guardTimer = null, guardCheckTimer = null, guardRunning = false, guardAgain = false, guardOff = false;
+// AIM-аас гарч эхэлмэгц (сэргээлтийн командуудаас ӨМНӨ) guard болон drift шалгалтыг зогсооно —
+// эс бөгөөс сэргээж буй competitive утгыг "өөрчлөгдсөн" гэж үзээд AIM утгаар дарах эрсдэлтэй.
+function stopGuard() {
+  guardOff = true;
+  if (guardTimer) { clearTimeout(guardTimer); guardTimer = null; }
+  if (guardCheckTimer) { clearTimeout(guardCheckTimer); guardCheckTimer = null; }
+}
+function scheduleGuard() {
+  const w = arena.workshop;
+  if (guardOff) return;
+  // configuring/ready = сервер AIM map-аа мэдээлсэн. (configAt-ыг хүлээхгүй: mp_restartgame-ийн Round_Start түүнээс өмнө ирж болно)
+  if (!arena.aim || !w || w.purpose !== 'aim' || !['configuring', 'ready'].includes(w.phase) || guardTimer) return;
+  guardTimer = setTimeout(() => { guardTimer = null; runGuard().catch(e => dbg('guard', e.message)); }, ARENA_GUARD_MS);
+}
+async function runGuard() {
+  if (guardOff) return;
+  if (guardRunning) { guardAgain = true; return; }        // одоо тавьж байгаа бол дуусмагц дахин нэг удаа
+  const aim = arena.aim; if (!aim) return;
+  guardRunning = true;
+  try {
+    // Бүгдийг нэг дор (round 1с-ийн дотор амжина). Команд бүр safe()-ээр шалгагдана; ";" хэзээ ч ашиглахгүй.
+    const cmds = arenaLib.aimGuard(aim, { winlimit: aim.winlimit !== false }).map(safe);
+    if (arena.aim !== aim || guardOff) return;
+    for (const x of cmds) if (!rcon.send(x)) throw new Error('RCON холбогдоогүй');
+    if (arena.workshop) arena.workshop.guardAt = Date.now();
+  } finally { guardRunning = false; }
+  if (guardAgain) { guardAgain = false; return runGuard(); }
+  if (guardCheckTimer) clearTimeout(guardCheckTimer);
+  guardCheckTimer = setTimeout(() => { guardCheckTimer = null; checkGuard(aim).catch(e => dbg('guard check', e.message)); }, ARENA_GUARD_CHECK_MS - ARENA_GUARD_MS);
+}
+async function checkGuard(aim) {
+  if (arena.aim !== aim || guardOff || guardRunning || guardTimer) return;   // шинэ guard хүлээгдэж байвал тэр нь шалгана
+  const exp = arenaLib.aimExpect(aim, { winlimit: aim.winlimit !== false }).required, bad = [];
+  for (const k of arenaLib.GUARD_CHECK) {
+    if (arena.aim !== aim || guardOff) return;
+    const got = arenaLib.parseCvar(await rcon.exec(k).catch(() => ''), k);
+    if (got === null || !sameVal(got, exp[k])) bad.push(`${k}=${got === null ? '?' : got}`);
+  }
+  if (!bad.length) return dbg('AIM guard OK');
+  if (arena.aim !== aim || guardOff) return;
+  log('⚠ Map-ын өөрийн тохиргоо AIM-ийг дарж бичлээ (' + bad.slice(0, 3).join(', ') + ') — дахин тогтооно');
+  await runGuard();
 }
 const teamNames = () => ({ CT: state.players.filter(p => p.team === 'CT' && !p.bot).map(p => p.name).slice(0, 5), T: state.players.filter(p => p.team === 'T' && !p.bot).map(p => p.name).slice(0, 5) });
 const needArena = () => { if (!arenaLib || !CATALOG.length) throw new Error('Agent дээр Workshop/AIM модуль алга — agent хавтсанд arena-modes.js, workshop-maps.json хуулаад agent-ийг дахин асаана уу'); };
@@ -381,11 +440,13 @@ async function startWorkshop(entry, purpose) {
 // Competitive руу буцах: snapshot сэргээх + MatchZy-ийн анхны autostart горим (map солихоос ӨМНӨ)
 function leaveAimCommands() {
   if (!arena.aim) return [];
+  stopGuard();
   const cmds = [...stopAimLogCommands(), ...arenaLib.restoreCommands(arena.snapshot)];
   if (state.matchzy || arena.matchzyAutostart !== null) cmds.push(`matchzy_autostart_mode ${[0, 1, 2].includes(arena.matchzyAutostart) ? arena.matchzyAutostart : 1}`);
   return cmds;
 }
 function clearAim() {
+  stopGuard(); guardOff = false;   // arena.aim = null болсны дараа guard өөрөө идэвхгүй
   arena = { aim: null, snapshot: null, matchzyAutostart: null, workshop: null, log: null, result: null };
   state.mode = 'competitive'; saveArena();
 }
@@ -405,7 +466,10 @@ async function verifyAim() {
   return { ok: !bad.length, bad, badOpt };
 }
 async function applyAimConfig(opts = {}) {
-  for (const x of arenaLib.aimConfig(arena.aim, { winlimit: arena.aim.winlimit !== false, restart: opts.restart })) await rcon.exec(safe(x));
+  for (const x of arenaLib.aimConfig(arena.aim, { winlimit: arena.aim.winlimit !== false, restart: opts.restart })) {
+    if (guardOff || !arena.aim) return;                  // AIM-аас гарч эхэлсэн — competitive сэргээлтийг дарахгүй
+    await rcon.exec(safe(x));
+  }
   if (opts.restart !== false) { arena.result = null; state.score = { ct: 0, t: 0 }; }
   arena.workshop.configAt = Date.now();
   log(`✓ AIM тохиргоо: ${arena.aim.size}v${arena.aim.size}, ${arenaLib.WEAPON_LABELS[arena.aim.weapon]}, first to ${arena.aim.rounds}${opts.restart === false ? ' (дахин хэрэгжүүлэв, оноо хэвээр)' : ''}`);
@@ -428,6 +492,7 @@ const ARENA_HANDLERS = {
     const entry = wsEntry(a.map);
     if (!entry || entry.category !== 'aim') throw new Error(`AIM map "${a.map}" agent-ийн workshop-maps.json-д алга — файлаа шинэчилнэ үү`);
     const s = arenaLib.aimSettings(a, entry);
+    guardOff = false;
     if (!arena.aim) {
       // Анх AIM-д орох: одоогийн серверийн тохиргоог хадгална (буцахад сэргээнэ)
       arena.snapshot = await arenaLib.readSnapshot((c) => rcon.exec(c));
@@ -457,6 +522,7 @@ const ARENA_HANDLERS = {
     const onMapNow = arenaLib.isOnMap(state.map, entry, wf ? wf.names : []);
     if (!w || !(['ready', 'configuring'].includes(w.phase) || (w.phase === 'error' && onMapNow))) throw new Error('AIM map хараахан бэлэн болоогүй байна');
     if (a && a.size !== undefined) Object.assign(arena.aim, arenaLib.aimSettings(a, entry));
+    guardOff = false;
     w.error = null; w.warning = null; w.verified = false;
     await startAimLog();
     await applyAimConfig();                       // mp_restartgame 1 → оноо 0:0, сонгосон тохиргоогоор
@@ -486,6 +552,7 @@ const ARENA_HANDLERS = {
 // Tick бүрт: Workshop ачаалалтын явц, AIM тохиргоо хэрэгжүүлэх/шалгах (сервер өөрөө батлахыг хүлээнэ)
 async function arenaTick() {
   const w = arena.workshop; if (!w || !arenaLib) return;
+  if (arena.aim && guardOff) return;                     // AIM-аас гарч байна (сэргээлт явагдаж байна)
   const entry = wsEntry(w.id); if (!entry) return;
   const now = Date.now(), before = JSON.stringify(w);
   const files = arenaLib.workshopFiles(CFG.cs2Dir, entry.workshopId);
@@ -502,6 +569,9 @@ async function arenaTick() {
         if (v.ok) {
           const o = await handleOptional(v.badOpt);
           if (!o.reapplied) { configVerified = w.verified = true; w.warning = o.warning || null; }
+        } else if (now - w.configAt >= ARENA_GUARD_CHECK_MS && now - w.onMapAt <= ARENA_CONFIG_TIMEOUT_MS && !guardRunning) {
+          // Map-ын өөрийн команд (эсвэл MatchZy) дарж бичсэн — log ирээгүй байсан ч оноо тэглэхгүйгээр шууд дахин тогтооно
+          await runGuard();
         } else if (now - w.onMapAt > ARENA_CONFIG_TIMEOUT_MS) {
           // Map ачаалагдсан ч тохиргоо баталгаажаагүй → "Бэлэн" ГЭЖ ХЭЛЭХГҮЙ
           w.phase = 'error'; w.error = 'Map ачаалагдсан боловч AIM тохиргоо баталгаажсангүй: ' + v.bad.slice(0, 4).join(', ') + ' — «Дахин тоглох» дарж дахин оролдоно уу';
