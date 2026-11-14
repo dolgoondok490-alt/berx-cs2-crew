@@ -19,15 +19,18 @@ const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 
 /* ---------- тохиргоо ---------- */
 (function loadEnv() {
-  const f = process.env.BERX_AGENT_ENV || path.join(__dirname, '.env');
-  if (!fs.existsSync(f)) return;
+  // .env (үндсэн, хөндөхгүй) + .env.skins (SKIN INVENTORY синкийн тусдаа тохиргоо, заавал биш)
+  const main = process.env.BERX_AGENT_ENV || path.join(__dirname, '.env');
+  for (const f of [main, path.join(path.dirname(main), '.env.skins')]) {
+  if (!fs.existsSync(f)) continue;
   for (const line of fs.readFileSync(f, 'utf8').split(/\r?\n/)) {
     const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
     if (m && !line.trim().startsWith('#') && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+  }
   }
 })();
 const CFG = {
@@ -326,7 +329,8 @@ async function heartbeat() {
   return api('heartbeat', {
     online: state.online, map: state.map, mode: state.mode, phase: state.phase, score: state.score,
     players: state.players, maxPlayers: CFG.maxPlayers, address: CFG.publicAddress || null, hostname: state.hostname,
-    matchzy: state.matchzy, appliedTeamsVersion: state.appliedTeamsVersion, settings: state.settings, agentVersion: VERSION, humans: humans.length, mapsAvailable: mapsAvailable()
+    matchzy: state.matchzy, appliedTeamsVersion: state.appliedTeamsVersion, settings: state.settings, agentVersion: VERSION, humans: humans.length, mapsAvailable: mapsAvailable(),
+    skins: skins && skins.enabled ? skins.status() : undefined
   });
 }
 
@@ -354,6 +358,14 @@ async function tick() {
   } catch (e) { if (e.message !== lastErr) log('✖', e.message); lastErr = e.message; }
   finally { busy = false; }
 }
+
+/* ---------- SKIN INVENTORY синк (заавал биш, анхдагчаар унтраалттай) ---------- */
+let skins = null;
+try {
+  const { createSkinsSync } = require('./skins-sync');
+  skins = createSkinsSync({ env: process.env, api: (p, body) => api(p, body), rconExec: (c) => rcon.exec(c), getPlayers: () => state.players, log });
+  if (skins.enabled) setInterval(() => { skins.tick().catch(e => log('✖ Skins:', e.message)); }, skins.pollMs || 10000).unref();
+} catch (e) { if (process.env.SKINS_SYNC_ENABLED === '1') log('✖ Skins модуль ачаалагдсангүй:', e.message); }
 
 log(`BERX Agent v${VERSION} → ${CFG.site}`);
 log(`RCON ${CFG.rconHost}:${CFG.rconPort} · public: ${CFG.publicAddress || '(тохируулаагүй)'} · CS2_DIR: ${CFG.cs2Dir || '(тохируулаагүй)'}`);

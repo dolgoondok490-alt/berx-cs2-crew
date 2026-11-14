@@ -473,6 +473,8 @@
     adminToggle(uid_) { S.set(s => { const m = s.members.find(x => x.id === uid_); if (m) m.admin = !m.admin; }); },
     adminRemove(uid_) { S.set(s => { s.members = s.members.filter(x => x.id !== uid_); delete s.availability[uid_]; }); },
     isLive() { return !!S.get().live; },
+    // Feature flag-ууд backend-ээс (/api/health). Demo preview (backend-гүй) үед SKIN INVENTORY локалаар туршина.
+    features() { return backend ? (backend.features || {}) : { skins: true }; },
     logout() { S.set(s => { s.session = null; }); }
   };
 })();

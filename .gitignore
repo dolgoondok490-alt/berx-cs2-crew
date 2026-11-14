@@ -10,3 +10,6 @@ launcher/dist/
 launcher/**/bin/
 launcher/**/obj/
 launcher/shots/
+agent/.env.skins
+agent/node_modules/
+skins/windows/secrets/

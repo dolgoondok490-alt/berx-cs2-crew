@@ -72,6 +72,7 @@
     trash: '<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>',
     refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
     lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+    skins: '<path d="M3 15l7-7 3 1 6-6 2 2-6 6 1 3-7 7z"/><path d="M7 13l4 4"/>',
     server: '<rect x="3" y="3" width="18" height="7" rx="2"/><rect x="3" y="14" width="18" height="7" rx="2"/><path d="M7 6.5h.01M7 17.5h.01M11 6.5h6M11 17.5h6"/>',
     upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>'
   };
@@ -116,14 +117,16 @@
     { id: 'stats', label: 'Статистик', ic: 'stats' },
     { id: 'leaderboard', label: 'Leaderboard', ic: 'trophy' },
     { id: 'awards', label: 'Awards', ic: 'crown' },
-    { id: 'server', label: 'SERVER', ic: 'server' }
+    { id: 'server', label: 'SERVER', ic: 'server' },
+    { id: 'skins', label: 'SKIN INVENTORY', ic: 'skins', feature: 'skins' }
   ];
+  const navItems = () => NAV.filter(n => !n.feature || (API().features && API().features()[n.feature]));
 
   function Sidebar(route, ctx) {
     return `
       <a class="brand" href="#dashboard" aria-label="BERX CS2 CREW — Нүүр"><img class="brand-logo" src="assets/brand/berx-logo-192.png" alt="BERX" width="54" height="54"><div class="brand-txt"><div class="logo">BERX</div><div class="sub">CS2 CREW</div></div></a>
       <nav class="nav">
-        ${NAV.map(n => `<a href="#${n.id}" class="${route === n.id ? 'active' : ''}">${icon(n.ic)}<span>${n.label}</span>${n.id === 'invite' && ctx.pendingInvites ? `<span class="badge">${ctx.pendingInvites}</span>` : ''}</a>`).join('')}
+        ${navItems().map(n => `<a href="#${n.id}" class="${route === n.id ? 'active' : ''}">${icon(n.ic)}<span>${n.label}</span>${n.id === 'invite' && ctx.pendingInvites ? `<span class="badge">${ctx.pendingInvites}</span>` : ''}</a>`).join('')}
         <div class="nav-sep"></div>
         <a href="#admin" class="${route === 'admin' ? 'active' : ''}">${icon('gear')}<span>Тохиргоо</span></a>
       </nav>
