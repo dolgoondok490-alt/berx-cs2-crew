@@ -90,3 +90,4 @@ jobs:
           ./tests/skins/stage-layout.ps1 -WorkRoot "$env:RUNNER_TEMP\stage-ps7"
           if ($LASTEXITCODE -ne 0) { exit 1 }
           if (Test-Path C:\berx-skins) { Write-Host 'FAIL: test touched C:\berx-skins'; exit 1 }
+          if ($env:BERX_WORK_DIR -or $env:BERX_CS2_DIR) { Write-Host 'FAIL: test leaked BERX_* env vars into the session'; exit 1 } else { Write-Host 'PASS env restored' }

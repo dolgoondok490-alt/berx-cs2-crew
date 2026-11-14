@@ -9,6 +9,9 @@
 param([switch]$SkipReal, [string]$WorkRoot = (Join-Path ([IO.Path]::GetTempPath()) ('berx-stage-test-' + [guid]::NewGuid().ToString('N').Substring(0, 8))))
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+# Тест дууссаны дараа (алдаатай ч) таны PowerShell цонхны орчны хувьсагчийг сэргээнэ
+$prevWork = $env:BERX_WORK_DIR; $prevCs2 = $env:BERX_CS2_DIR
+try {
 $env:BERX_WORK_DIR = Join-Path $WorkRoot 'work'
 $env:BERX_CS2_DIR = Join-Path $WorkRoot 'fake-cs2'
 . (Join-Path $repo 'skins\windows\common.ps1')
@@ -182,6 +185,8 @@ if (-not $SkipReal) {
 }
 
 Write-Host "`n$script:pass passed, $script:fail failed"
+if (-not $script:fail) { Remove-Item $WorkRoot -Recurse -Force -ErrorAction SilentlyContinue }
+} catch { $script:fail++; Write-Host "FAIL (exception) $($_.Exception.Message)" -ForegroundColor Red }
+finally { $env:BERX_WORK_DIR = $prevWork; $env:BERX_CS2_DIR = $prevCs2 }
 if ($script:fail) { exit 1 }
-Remove-Item $WorkRoot -Recurse -Force -ErrorAction SilentlyContinue
 exit 0
