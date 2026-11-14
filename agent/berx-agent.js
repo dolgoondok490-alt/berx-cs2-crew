@@ -19,7 +19,7 @@ const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 
-const VERSION = '1.0.0';
+const VERSION = '1.1.0';
 
 /* ---------- тохиргоо ---------- */
 (function loadEnv() {
@@ -119,7 +119,7 @@ async function ensureRcon() {
     await rcon.exec(`matchzy_remote_log_url "http://127.0.0.1:${CFG.eventsPort}/matchzy"`).catch(() => {});
     await rcon.exec('matchzy_remote_log_header_key "X-Berx-Agent"').catch(() => {});
     await rcon.exec(`matchzy_remote_log_header_value "${eventSecret}"`).catch(() => {});
-    state.lastPluginCheck = 0;
+    state.lastPluginCheck = 0; state.lastMapCheck = 0;
     return true;
   } catch (e) { if (state.online !== false) log('✖ RCON холбогдсонгүй:', e.message); rcon.close(); return false; }
 }
@@ -210,14 +210,42 @@ http.createServer((req, res) => {
   .on('error', (e) => log('⚠ Event port нээгдсэнгүй:', e.message));
 
 /* ---------- Allowlist: сайтын команд → RCON ---------- */
-const MAPS = { mirage: 'de_mirage', dust2: 'de_dust2', inferno: 'de_inferno', nuke: 'de_nuke', ancient: 'de_ancient' };
+const MAPS = { mirage: 'de_mirage', dust2: 'de_dust2', inferno: 'de_inferno', nuke: 'de_nuke', ancient: 'de_ancient', anubis: 'de_anubis', cache: 'de_cache' };
+// Серверт суугаагүй map-ыг Workshop-оос ачаалах (заавал биш): agent/.env-д WORKSHOP_CACHE=<workshop id> гэх мэт
+const WORKSHOP = Object.fromEntries(Object.keys(MAPS).map(id => [id, process.env['WORKSHOP_' + id.toUpperCase()]]).filter(([, v]) => /^\d{6,12}$/.test(v || '')));
+
+/* ---------- Map серверт суусан эсэхийг шалгах (таамаглахгүй) ----------
+ *  1) CS2_DIR тохируулсан бол: game/csgo/maps/<map>.vpk файл байгаа эсэх
+ *  2) үгүй бол RCON "maps *" жагсаалт
+ *  3) аль нь ч болохгүй бол тодорхойгүй (null) — сайт анхааруулга харуулахгүй, changelevel-ийн хариугаар шалгана */
+let installed = null;
+async function checkMaps() {
+  const dir = CFG.cs2Dir && path.join(CFG.cs2Dir, 'game', 'csgo', 'maps');
+  if (dir && fs.existsSync(dir)) {
+    installed = Object.fromEntries(Object.entries(MAPS).map(([id, m]) => [id, fs.existsSync(path.join(dir, m + '.vpk')) || fs.existsSync(path.join(dir, m + '.bsp'))]));
+  } else {
+    const r = await rcon.exec('maps *').catch(() => '');
+    installed = /\bde_\w+/.test(r) ? Object.fromEntries(Object.entries(MAPS).map(([id, m]) => [id, new RegExp('\\b' + m + '\\b').test(r)])) : null;
+  }
+  const missing = installed ? Object.keys(installed).filter(id => !installed[id]) : [];
+  if (missing.length) log('⚠ Серверт суугаагүй map:', missing.map(id => MAPS[id] + (WORKSHOP[id] ? ` (Workshop ${WORKSHOP[id]} ашиглана)` : '')).join(', '));
+  dbg('maps installed:', installed);
+}
+const mapsAvailable = () => installed ? Object.fromEntries(Object.keys(MAPS).map(id => [id, !!(installed[id] || WORKSHOP[id])])) : null;
 const n = (v, min, max) => { const x = Math.round(Number(v)); if (!Number.isFinite(x) || x < min || x > max) throw new Error(`утга ${min}-${max}`); return x; };
 const b = (v) => (v === true || v === 1 || v === '1' || v === 'true');
 const curMap = () => (state.map && /^[\w]+$/.test(state.map) ? state.map : 'de_mirage');
 const PRACTICE = ['sv_cheats 1', 'mp_limitteams 0', 'mp_autoteambalance 0', 'mp_freezetime 0', 'mp_roundtime 60', 'mp_roundtime_defuse 60', 'mp_buy_anywhere 1',
   'mp_buytime 9999', 'mp_maxmoney 60000', 'mp_startmoney 60000', 'sv_infinite_ammo 1', 'ammo_grenade_limit_total 5', 'sv_grenade_trajectory_prac_pipreview 1', 'mp_warmup_end', 'mp_restartgame 1'];
 const HANDLERS = {
-  changemap: (a) => { const m = MAPS[a.map]; if (!m) throw new Error('map зөвшөөрөгдөөгүй'); state.score = null; state.phase = 'warmup'; return [`changelevel ${m}`]; },
+  changemap: (a) => {
+    const m = MAPS[a.map]; if (!m) throw new Error('map зөвшөөрөгдөөгүй');
+    const cmd = installed && installed[a.map] === false
+      ? (WORKSHOP[a.map] ? `host_workshop_map ${WORKSHOP[a.map]}` : null)
+      : `changelevel ${m}`;
+    if (!cmd) throw new Error(`${m} серверт суугаагүй байна. SteamCMD-ээр CS2-оо шинэчилнэ үү (app_update 730 validate).`);
+    state.score = null; state.phase = 'warmup'; return [cmd];
+  },
   mode: (a) => {
     if (a.value === 'competitive') { state.mode = 'competitive'; return ['game_type 0', 'game_mode 1', 'sv_cheats 0', `changelevel ${curMap()}`]; }
     if (a.value === 'wingman') { state.mode = 'wingman'; return ['game_type 0', 'game_mode 2', 'sv_cheats 0', `changelevel ${curMap()}`]; }
@@ -276,6 +304,7 @@ async function runCommand(c) {
     for (const x of cmds) { if (!/^[\w .:"\-]+$/.test(x)) throw new Error('Аюултай тэмдэгт'); out += (await rcon.exec(x)).slice(0, 300); }
     if (c.type === 'apply_teams') state.appliedTeamsVersion = lastTeams.version;
     if (/Unknown command/i.test(out)) throw new Error('Сервер командыг танихгүй байна: ' + out.trim().slice(0, 160));
+    if (/changelevel failed|failed to load|map not found|not found on server|invalid map/i.test(out)) throw new Error('Map ачаалагдсангүй: ' + out.trim().slice(0, 160));
     log('✓', c.type, JSON.stringify(c.args || {}));
     state.lastSettingsAt = 0;
     return { ok: true, output: out.trim().slice(0, 500) };
@@ -297,7 +326,7 @@ async function heartbeat() {
   return api('heartbeat', {
     online: state.online, map: state.map, mode: state.mode, phase: state.phase, score: state.score,
     players: state.players, maxPlayers: CFG.maxPlayers, address: CFG.publicAddress || null, hostname: state.hostname,
-    matchzy: state.matchzy, appliedTeamsVersion: state.appliedTeamsVersion, settings: state.settings, agentVersion: VERSION, humans: humans.length
+    matchzy: state.matchzy, appliedTeamsVersion: state.appliedTeamsVersion, settings: state.settings, agentVersion: VERSION, humans: humans.length, mapsAvailable: mapsAvailable()
   });
 }
 
@@ -310,6 +339,7 @@ async function tick() {
       try {
         await readStatus();
         if (Date.now() - state.lastPluginCheck > 60e3) { await checkPlugins(); state.lastPluginCheck = Date.now(); }
+        if (!state.lastMapCheck || Date.now() - state.lastMapCheck > 600e3) { await checkMaps(); state.lastMapCheck = Date.now(); }
         if (Date.now() - state.lastSettingsAt > 30e3) { await readSettings(); state.lastSettingsAt = Date.now(); }
       } catch (e) { log('⚠ Төлөв уншихад алдаа:', e.message); }
     } else { state.players = []; }

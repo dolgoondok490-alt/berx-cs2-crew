@@ -93,12 +93,6 @@
   };
 
 
-  const MEMES = [
-    { id: 'meme-1', by: 'kaze', text: 'Тэр мөч: 1v5 clutch-д ороод "би энийг авна" гэж хэлсэн ч 3 секундэд үхэх 💀', likes: ['dok', 'senzu'], img: null, date: Date.now() - 2 * DAY },
-    { id: 'meme-2', by: 'senzu', text: 'b1t_jr flash шидэхэд: багийн 4 нь сохорсон, дайсан 0 😎', likes: ['dok', 'kaze', 'nmgd'], img: null, date: Date.now() - 3 * DAY },
-    { id: 'meme-3', by: 'temka', text: '"Ганцхан тоглоод унтъя" — 04:12 цаг, 7 дахь тоглолт', likes: ['zolboo'], img: null, date: Date.now() - 5 * DAY }
-  ];
-
   const CHAT = [
     { by: 'kaze', text: 'Өнөө орой хэдэн цагт вэ?', date: Date.now() - 3.2 * 3600000 },
     { by: 'dok', text: '21:00. FACEIT. Хоцорвол ALWAYS LATE шагнал чинийх 😤', date: Date.now() - 3.0 * 3600000 },
@@ -131,6 +125,6 @@
   Object.assign(base, {
     isDemo: true,
     MEMBERS, MATCHES, PAST_MANUAL_AWARDS, MANUAL_RECORDS, EXCUSES_SAID,
-    MEMES, CHAT, INVITES, AVAILABILITY, PRESENCE, LAST_SEEN
+    CHAT, INVITES, AVAILABILITY, PRESENCE, LAST_SEEN
   });
 })();

@@ -33,12 +33,15 @@
   }
   const cmd = (type, args, label) => act('server.cmd', { type, args }, `${label || type} — серверт илгээгдлээ (дараалалд)`);
 
+  // "de_cache", "workshop/123/de_cache" → "cache"
+  const mapIdOf = (name) => name ? String(name).split('/').pop().replace(/^(de|cs)_/, '') : null;
+
   function statusCard(d) {
     const s = d.server, me = A.me();
     if (d.demo) return `<div class="card srv-offline"><div class="srv-dot off"></div><div><div class="display" style="font-size:24px">NOT CONFIGURED</div><div class="muted">Энэ бол preview (demo). Бодит сервер зөвхөн Vercel дээрх сайтад холбогдоно.</div></div></div>`;
     if (!d.configured) return `<div class="card srv-offline"><div class="srv-dot off"></div><div><div class="display" style="font-size:24px">NOT CONFIGURED</div><div class="muted">Сервер холбогдоогүй байна. ${me && me.admin ? 'Vercel дээр <code>SERVER_AGENT_SECRET</code> тохируулаад таны компьютер дээр BERX Agent-ийг асаана (agent/README.md).' : 'Admin серверийг тохируулахыг хүлээнэ үү.'}</div></div></div>`;
     if (!d.online) return `<div class="card srv-offline"><div class="srv-dot off"></div><div><div class="display" style="font-size:24px">OFFLINE</div><div class="muted">${d.lastSeen ? 'Сүүлд ' + U.timeAgo(d.lastSeen) + ' холбогдсон.' : 'Agent хараахан холбогдоогүй байна.'} Сервер эсвэл BERX Agent асаалттай эсэхийг шалгана уу.</div></div></div>`;
-    const mp = s.map ? A.mapInfo(String(s.map).replace(/^(de|cs)_/, '')) : null;
+    const mp = s.map ? A.mapInfo(mapIdOf(s.map)) : null;
     const [ph, phCls] = PHASE[s.phase] || PHASE.unknown;
     return `<div class="card srv-status" style="${mp && mp.img ? `--img:url(${mp.img})` : ''}">
       <div class="srv-status-bg"></div>
@@ -64,17 +67,19 @@
   function mapVote(d) {
     const me = A.me(), online = d.online;
     const total = Object.values(d.votes || {}).reduce((a, b) => a + b, 0);
-    const cur = d.server && d.server.map ? String(d.server.map).replace(/^(de|cs)_/, '') : null;
+    const cur = d.server && d.server.map ? mapIdOf(d.server.map) : null;
+    const avail = (d.server && d.server.mapsAvailable) || {};
     return `<div class="card">
       ${CardHead('map', 'Map сонгох', `<span class="muted" style="font-size:12px">${total} санал</span>`)}
       <div class="srv-maps">${(d.maps || A.LAN_MAPS).map(id => {
         const m = A.mapInfo(id), n = (d.votes || {})[id] || 0, mine = d.myVote === id, pct = total ? Math.round(n / total * 100) : 0;
-        return `<div class="srv-map ${mine ? 'mine' : ''} ${cur === id ? 'current' : ''}">
+        const missing = avail[id] === false;   // agent шалгаад серверт олдоогүй
+        return `<div class="srv-map ${mine ? 'mine' : ''} ${cur === id ? 'current' : ''} ${missing ? 'missing' : ''}">
           <button class="srv-map-pic" data-action="srv-vote" data-map="${id}" aria-pressed="${mine}" style="${m.img ? `--img:url(${m.img})` : ''}">
-            ${cur === id ? '<span class="srv-now">● ОДОО</span>' : ''}<span class="nm">${esc(m.name)}</span></button>
+            ${cur === id ? '<span class="srv-now">● ОДОО</span>' : ''}${missing ? '<span class="srv-missing" title="CS2 серверт энэ map суугаагүй байна (SteamCMD-ээр CS2-оо шинэчилнэ үү)">Серверт алга</span>' : ''}<span class="nm">${esc(m.name)}</span></button>
           <div class="srv-vote-bar"><i style="width:${pct}%"></i></div>
           <div class="row between" style="font-size:12px;margin-top:4px"><span class="${mine ? 'accent' : 'muted'}">${mine ? '✓ Таны санал' : 'Санал өгөх'}</span><b>${n}</b></div>
-          ${me && me.admin ? `<button class="btn sm outline block" style="margin-top:6px" data-action="srv-cmd" data-type="changemap" data-arg-map="${id}" ${online ? '' : 'disabled'}>Серверт тавих</button>` : ''}
+          ${me && me.admin ? `<button class="btn sm outline block" style="margin-top:6px" data-action="srv-cmd" data-type="changemap" data-arg-map="${id}" ${online && !missing ? '' : 'disabled'} ${missing ? 'title="Серверт суугаагүй"' : ''}>Серверт тавих</button>` : ''}
         </div>`;
       }).join('')}</div>
     </div>`;

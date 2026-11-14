@@ -119,11 +119,7 @@
       notify(text, icon) { toast(text, icon); }, // мэдэгдлийг server үүсгэнэ
       simulateResponses() { /* live горимд дуурайлт байхгүй */ },
       voteChicken(target) { const id = me().id; S.set(s => { s.votes.CHICKEN[id] = target; }); act('vote.chicken', { target }); },
-      voteMatch(key, k, target) { act('vote.match', { key, k, target }); },
       record(kind, userId, delta) { act('record.add', { kind, userId, delta }); },
-      memeCreate({ text, img }) { act('meme.create', { id: newId(), text, img }); },
-      memeLike(id) { act('meme.like', { id }); },
-      memeDelete(id) { act('meme.delete', { id }); },
       async profileUpdate(f) {
         try { await api('action', { type: 'profile.update', payload: f }); await refresh(); return { ok: true }; }
         catch (e) { return { error: e.message }; }

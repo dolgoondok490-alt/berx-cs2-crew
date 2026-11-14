@@ -5,7 +5,7 @@
   'use strict';
   const U = window.BerxUI, A = window.BerxAPI, S = window.BerxStore, PAGES = window.BerxPages;
   const { icon, esc, Avatar } = U;
-  const ROUTES = ['dashboard', 'invite', 'crew', 'stats', 'leaderboard', 'awards', 'fun', 'server', 'admin'];
+  const ROUTES = ['dashboard', 'invite', 'stats', 'leaderboard', 'awards', 'server', 'admin'];
   const root = document.getElementById('app');
 
   const App = window.BerxApp = {
@@ -34,7 +34,7 @@
   function loginView() {
     const reg = App.authTab === 'register';
     return `<div class="login">
-      <div class="art"><div class="txt"><div class="brand"><div class="logo" style="font-size:64px">BER<b>X</b></div><div class="sub" style="font-size:16px">CS2 CREW</div></div><div class="side-motto" style="font-size:24px;margin-top:18px">BAD AIM.<br>LOW ELO.<span></span></div></div></div>
+      <div class="art"><div class="txt"><div class="brand login-brand"><img class="brand-logo" src="assets/brand/berx-logo-512.png" alt="BERX" width="132" height="132"><div class="brand-txt"><div class="logo">BERX</div><div class="sub">CS2 CREW</div></div></div><div class="side-motto" style="font-size:24px;margin-top:18px">BAD AIM.<br>LOW ELO.<span></span></div></div></div>
       <div class="panel">
         <div class="seg" style="margin-bottom:18px;align-self:flex-start"><button class="${reg ? '' : 'on'}" data-action="auth-tab" data-v="login">Нэвтрэх</button><button class="${reg ? 'on' : ''}" data-action="auth-tab" data-v="register">Бүртгүүлэх</button></div>
         <h1 class="display" style="font-size:40px;margin:0 0 4px">${reg ? 'Бүртгүүлэх' : 'Нэвтрэх'}</h1>
@@ -252,7 +252,7 @@
 
   App.route = currentRoute();
   // 1) Server (Vercel/локал) байгаа эсэхийг шалгана → байвал LIVE, үгүй бол DEMO (preview)
-  root.innerHTML = '<div style="min-height:100vh;display:grid;place-items:center"><div class="brand" style="align-items:center"><div class="logo" style="font-size:54px">BER<b>X</b></div><div class="sub">LOADING...</div></div></div>';
+  root.innerHTML = '<div class="boot"><img class="boot-logo" src="assets/brand/berx-logo-192.png" alt="BERX" width="96" height="96"><div class="sub">LOADING...</div></div>';
   const timeout = new Promise(r => setTimeout(() => r(null), 10000)); // Vercel cold start-д хангалттай
   const loadScript = (src) => new Promise((ok, fail) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => fail(new Error(src + ' ачаалагдсангүй')); document.head.appendChild(s); });
   Promise.race([A.detectBackend(), timeout]).then(async b => {
@@ -271,6 +271,6 @@
   }).catch(err => {
     console.error(err);
     App.booting = false;
-    root.innerHTML = `<div style="min-height:100vh;display:grid;place-items:center;padding:24px;text-align:center"><div><div class="logo display" style="font-size:44px">BERX</div><p class="muted">Ачаалахад алдаа гарлаа. Хуудсаа дахин ачаална уу.</p><pre style="color:#ff8b8b;white-space:pre-wrap;font-size:12px">${esc(err.message)}</pre><button class="btn primary" onclick="location.reload()">Дахин ачаалах</button></div></div>`;
+    root.innerHTML = `<div style="min-height:100vh;display:grid;place-items:center;padding:24px;text-align:center"><div><img src="assets/brand/berx-logo-192.png" alt="BERX" width="88" height="88" style="display:block;margin:0 auto 10px"><p class="muted">Ачаалахад алдаа гарлаа. Хуудсаа дахин ачаална уу.</p><pre style="color:#ff8b8b;white-space:pre-wrap;font-size:12px">${esc(err.message)}</pre><button class="btn primary" onclick="location.reload()">Дахин ачаалах</button></div></div>`;
   });
 })();

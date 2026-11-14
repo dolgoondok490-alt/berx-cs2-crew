@@ -37,7 +37,7 @@
       ],
       chat: clone(M.CHAT),
       lastExcuse: {},                      // { userId: 'хамгийн сүүлийн шалтаг' }
-      memes: clone(M.MEMES),
+      memes: [],
       manual: clone(M.MANUAL_RECORDS),
       votes: { CHICKEN: { kaze: 'nmgd', senzu: 'nmgd', temka: 'l1m0n' } },     // энэ долоо хоногийн санал
       matchVotes: {},                      // { matchId: { voterId: { mvp, bot } } }

@@ -131,7 +131,7 @@
               ${r.rank <= 3 ? `<span class="medal g${r.rank}">${r.rank}</span>` : `<span class="dim" style="text-align:center">${r.rank}</span>`}${Avatar(r.m, 30)}<b>${esc(r.m.nick)}</b>
               <span class="mono ${u.lbTab === 'premier' ? 'premier' : u.lbTab === 'faceit' ? 'accent' : ''}" style="font-weight:800">${r.value ? r.display : '—'}</span><span class="dim mono" style="font-size:11.5px">${r.agg.kd ? (+r.agg.kd).toFixed(2) : ''}</span></button>`).join('')}
           </div>
-          <div class="card" style="background:linear-gradient(90deg,rgba(20,21,24,.95),rgba(20,21,24,.6)),url(assets/art/hero.jpg) right/cover">
+          <div class="card" style="background:linear-gradient(90deg,rgba(20,21,24,.95),rgba(20,21,24,.6)),url(assets/art/counter-strike--9192-1280.webp) right 30%/cover">
             <div class="kpi-label">Crew average Premier</div><div class="big-num">${avgRating ? avgRating.toLocaleString('en-US') : '—'}</div>
           </div>
         </div>

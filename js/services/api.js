@@ -53,7 +53,7 @@
     return { id, name: id === 'dust2' ? 'Dust II' : name, img: null };
   }
   // LAN урилгын map-ууд: invites.map баганад "mirage,dust2" хэлбэрээр (хуучин нэг map-тай урилгатай нийцтэй)
-  const LAN_MAPS = ['mirage', 'dust2', 'inferno', 'nuke', 'ancient'];
+  const LAN_MAPS = ['mirage', 'dust2', 'inferno', 'nuke', 'ancient', 'anubis', 'cache'];
   function inviteMaps(inv) { return String((inv && inv.map) || '').split(',').map(s => s.trim()).filter(Boolean); }
   function inviteMapsLabel(inv) { return inviteMaps(inv).map(id => mapInfo(id).name).join(' · '); }
   const isLiveM = (m) => !!(S.get().live && m && m.live && m.live.periods && m.live.periods.all && Array.isArray(m.live.weeks));
@@ -171,12 +171,12 @@
 
   /* ---------- Awards ---------- */
   const AWARDS = [
-    { key: 'CARRY', emoji: '👑', title: 'CARRY', desc: 'Хамгийн өндөр K/D', art: M.abs('assets/awards/carry.jpg'), source: 'auto' },
-    { key: 'AIM_GOD', emoji: '🎯', title: 'AIM GOD', desc: 'Хамгийн өндөр HS%', art: M.abs('assets/awards/aimgod.jpg'), source: 'auto' },
-    { key: 'MVP', emoji: '🔥', title: 'MVP', desc: 'Хамгийн өндөр дундаж rating', art: M.abs('assets/awards/mvp.jpg'), source: 'auto' },
-    { key: 'CHICKEN', emoji: '🐔', title: 'CHICKEN', desc: 'Санал хураалтаар хамгийн аймхай', art: M.abs('assets/awards/chicken.jpg'), source: 'vote' },
-    { key: 'BOT', emoji: '🤖', title: 'BOT', desc: 'Хамгийн бага K/D', art: M.abs('assets/awards/bot.jpg'), source: 'auto' },
-    { key: 'ELO_DONATOR', emoji: '📉', title: 'ELO DONATOR', desc: 'Хамгийн их ELO алдсан', art: M.abs('assets/awards/elodonator.jpg'), source: 'auto' },
+    { key: 'CARRY', emoji: '👑', title: 'CARRY', desc: 'Хамгийн өндөр K/D', art: null, source: 'auto' },
+    { key: 'AIM_GOD', emoji: '🎯', title: 'AIM GOD', desc: 'Хамгийн өндөр HS%', art: null, source: 'auto' },
+    { key: 'MVP', emoji: '🔥', title: 'MVP', desc: 'Хамгийн өндөр дундаж rating', art: null, source: 'auto' },
+    { key: 'CHICKEN', emoji: '🐔', title: 'CHICKEN', desc: 'Санал хураалтаар хамгийн аймхай', art: null, source: 'vote' },
+    { key: 'BOT', emoji: '🤖', title: 'BOT', desc: 'Хамгийн бага K/D', art: null, source: 'auto' },
+    { key: 'ELO_DONATOR', emoji: '📉', title: 'ELO DONATOR', desc: 'Хамгийн их ELO алдсан', art: null, source: 'auto' },
     { key: 'ALWAYS_LATE', emoji: '🐢', title: 'ALWAYS LATE', desc: 'Хамгийн олон удаа хоцорсон', art: null, source: 'manual' },
     { key: 'AFK_KING', emoji: '💤', title: 'AFK KING', desc: 'Хамгийн их AFK хийдэг', art: null, source: 'manual' },
     { key: 'EXCUSE_MASTER', emoji: '🎭', title: 'EXCUSE MASTER', desc: 'Хамгийн олон шалтаг', art: null, source: 'manual' }
@@ -375,7 +375,7 @@
       const id = 'st-' + steamId.slice(-8);
       S.set(s => { s.members.push({ id, nick: (nick || 'Steam_' + steamId.slice(-4)).slice(0, 16), name: nick || '', avatar: avatar || '', premier: 0, faceitElo: 1000, title: 'Шинэ гишүүн 🐣', steamId, faceitNick: '' });
         s.accounts.push({ userId: id, login: 'steam:' + steamId, kind: 'steam', hash: null, createdAt: Date.now() }); s.presence[id] = 'online'; });
-      notify(`${nick || 'Шинэ гишүүн'} Steam-ээр BERX багт нэгдлээ 🎉`, '👋', 'crew');
+      notify(`${nick || 'Шинэ гишүүн'} Steam-ээр BERX багт нэгдлээ 🎉`, '👋');
       m = member(id);
     } else if (!st.accounts.some(a => a.userId === m.id && a.kind === 'steam')) {
       S.set(s => s.accounts.push({ userId: m.id, login: 'steam:' + steamId, kind: 'steam', hash: null, createdAt: Date.now() }));
@@ -432,7 +432,7 @@
     members, member, me, matchesOf, mapInfo, fromPeriod, LAN_MAPS, inviteMaps, inviteMapsLabel, statsFor, leaderboard, awards, faceitLevel, aggregate,
     notify, createInvite, respond, setExcuse, genExcuse, cancelInvite, activeInvites, simulateResponses,
     setAvailability, sendChat, presenceOf, uid,
-    content: { challenges: M.CHALLENGES, excuseParts: M.EXCUSE_PARTS, quiz: M.QUIZ, get excusesSaid() { return M.EXCUSES_SAID || {}; } },
+    content: { excuseParts: M.EXCUSE_PARTS, get excusesSaid() { return M.EXCUSES_SAID || {}; } },
     // ---------- Auth (DEMO) ----------
     // Бодит хувилбар: supabase.auth.signUp({ email | phone, password }) / signInWithPassword(...)
     detectBackend, get backend() { return backend; }, syncStats, demoSteamLogin, checkSteamSession, parseSteamId,
@@ -451,7 +451,7 @@
         s.accounts.push({ userId: id, login: L.value, kind: L.kind, hash, createdAt: Date.now() });
         s.presence[id] = 'online'; s.session = { userId: id };
       });
-      notify(`${nick.trim()} BERX багт нэгдлээ 🎉`, '👋', 'crew');
+      notify(`${nick.trim()} BERX багт нэгдлээ 🎉`, '👋');
       return { ok: true };
     },
     async login(login, password) {
@@ -467,16 +467,11 @@
     account(userId) { return S.get().accounts.find(a => a.userId === userId); },
     // ---- mutations (demo: local; live.js нь server рүү дамжуулна) ----
     voteChicken(target) { const id = me().id; S.set(s => { s.votes.CHICKEN ||= {}; s.votes.CHICKEN[id] = target; }); },
-    voteMatch(key, k, target) { const id = me().id; S.set(s => { s.matchVotes[key] ||= {}; const v = s.matchVotes[key][id] ||= {}; v[k] = target; }); },
     record(kind, userId, delta) { S.set(s => { s.manual[kind] ||= {}; s.manual[kind][userId] = Math.max(0, (s.manual[kind][userId] || 0) + (delta < 0 ? -1 : 1)); }); },
-    memeCreate({ text, img }) { const id = me().id; S.set(s => { s.memes.unshift({ id: uid('meme'), by: id, text, img, likes: [], date: Date.now() }); s.memes = s.memes.slice(0, 30); }); },
-    memeLike(mid) { const id = me().id; S.set(s => { const m = s.memes.find(x => x.id === mid); if (m) m.likes = m.likes.includes(id) ? m.likes.filter(x => x !== id) : [...m.likes, id]; }); },
-    memeDelete(mid) { S.set(s => { s.memes = s.memes.filter(x => x.id !== mid); }); },
     profileUpdate(f) { const id = me().id; S.set(s => { const m = s.members.find(x => x.id === id); if (f.nick) m.nick = f.nick; if (f.bio !== undefined) m.title = f.bio; if (f.steamId !== undefined) m.steamId = f.steamId; if (f.faceitNick !== undefined) m.faceitNick = f.faceitNick; }); return Promise.resolve({ ok: true }); },
     setAvatar({ dataUrl, preset } = {}) { const id = me().id; S.set(s => { const m = s.members.find(x => x.id === id); m.avatar = dataUrl || preset || ''; m.customAvatar = !!dataUrl; }); },
     adminToggle(uid_) { S.set(s => { const m = s.members.find(x => x.id === uid_); if (m) m.admin = !m.admin; }); },
     adminRemove(uid_) { S.set(s => { s.members = s.members.filter(x => x.id !== uid_); delete s.availability[uid_]; }); },
-    lastMatchKey() { return S.get().live ? S.get().lastMatchKey : 'inv-seed-2'; },
     isLive() { return !!S.get().live; },
     logout() { S.set(s => { s.session = null; }); }
   };

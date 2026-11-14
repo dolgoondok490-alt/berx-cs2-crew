@@ -1,6 +1,6 @@
 # BERX CS2 CREW
 
-**BAD AIM. LOW ELO.** — найзуудын CS2 платформ: тоглох урилга, live lobby, Steam нэвтрэлт, Premier/FACEIT статистик, Leaderboard, Awards, Fun Room.
+**BAD AIM. LOW ELO.** — найзуудын CS2 платформ: тоглох урилга, live lobby, Steam нэвтрэлт, Premier/FACEIT статистик, Leaderboard, Awards, BERX ARENA сервер.
 
 ## Бүтэц
 ```
@@ -10,7 +10,7 @@ index.html, css/, js/, assets/   Frontend (framework-гүй, build хэрэгг�
   js/services/api.js             UI-ийн өгөгдлийн давхарга (demo горим)
   js/services/live.js            LIVE горим: бүх үйлдлийг server руу, realtime шинэчлэл
   js/ui/components.js            Sidebar, Header, PlayerCard, AwardCard, ProfileModal...
-  js/pages/*.js                  dashboard, invite, crew, stats, leaderboard, awards, fun, admin
+  js/pages/*.js                  dashboard, invite, stats, leaderboard, awards, server, admin
 api/index.js                     Vercel serverless function (бүх /api/*)
 lib/handler.js                   API: бүртгэл, нэвтрэлт, Steam OpenID, урилга, чат, санал...
 lib/db.js                        Supabase (PostgREST) эсвэл локал JSON файл

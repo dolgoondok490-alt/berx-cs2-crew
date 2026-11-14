@@ -113,17 +113,15 @@
   const NAV = [
     { id: 'dashboard', label: 'Нүүр', ic: 'home' },
     { id: 'invite', label: 'Тоглох урилга', ic: 'invite' },
-    { id: 'crew', label: 'BERX баг', ic: 'crew' },
     { id: 'stats', label: 'Статистик', ic: 'stats' },
     { id: 'leaderboard', label: 'Leaderboard', ic: 'trophy' },
     { id: 'awards', label: 'Awards', ic: 'crown' },
-    { id: 'fun', label: 'Хөгжилдөх өрөө', ic: 'game' },
     { id: 'server', label: 'SERVER', ic: 'server' }
   ];
 
   function Sidebar(route, ctx) {
     return `
-      <a class="brand" href="#dashboard"><div class="logo">BER<b>X</b></div><div class="sub">CS2 CREW</div></a>
+      <a class="brand" href="#dashboard" aria-label="BERX CS2 CREW — Нүүр"><img class="brand-logo" src="assets/brand/berx-logo-192.png" alt="BERX" width="54" height="54"><div class="brand-txt"><div class="logo">BERX</div><div class="sub">CS2 CREW</div></div></a>
       <nav class="nav">
         ${NAV.map(n => `<a href="#${n.id}" class="${route === n.id ? 'active' : ''}">${icon(n.ic)}<span>${n.label}</span>${n.id === 'invite' && ctx.pendingInvites ? `<span class="badge">${ctx.pendingInvites}</span>` : ''}</a>`).join('')}
         <div class="nav-sep"></div>
@@ -143,6 +141,7 @@
     const crumb = (NAV.find(n => n.id === route) || { label: route === 'admin' ? 'Тохиргоо' : '' }).label;
     return `
       <button class="icon-btn menu-btn" data-action="toggle-menu" aria-label="Цэс">${icon('menu')}</button>
+      <a class="topbar-logo" href="#dashboard" aria-label="BERX — Нүүр"><img src="assets/brand/berx-logo-192.png" alt="BERX" width="38" height="38"></a>
       <div class="crumb">BERX CS2 CREW / ${esc(crumb).toUpperCase()}</div>
       <div style="position:relative">
         <button class="icon-btn" data-action="toggle-notif" aria-label="Мэдэгдэл">${icon('bell')}${ctx.unread ? `<span class="dot-badge">${ctx.unread}</span>` : ''}</button>
@@ -175,8 +174,9 @@
     </div>`;
   }
 
-  function Hero({ kicker = 'BERX CS2 CREW', title, accent = '', lead = '', img }) {
-    return `<section class="hero" ${img ? `style="--hero-img:url(${img})"` : ''}>
+  function Hero({ kicker = 'BERX CS2 CREW', title, accent = '', lead = '', img, logo = false }) {
+    return `<section class="hero ${logo ? 'has-logo' : ''}" ${img ? `style="--hero-img:url(${img})"` : ''}>
+      ${logo ? `<img class="hero-logo" src="assets/brand/berx-logo-512.png" alt="BERX" width="132" height="132">` : ''}
       <span class="corner tl"></span><span class="corner br"></span>
       <div class="kicker">${esc(kicker)}</div>
       <h1>${esc(title)}${accent ? ` <em>${esc(accent)}</em>` : ''}</h1>
@@ -205,21 +205,6 @@
   }
 
   function LevelBadge(level) { return `<span class="lvl l${level}">${level}</span>`; }
-
-  function PlayerCard(m, opts = {}) {
-    const lvl = API().faceitLevel(m.faceitElo);
-    const av = window.BerxStore.get().availability[m.id];
-    return `<div class="card hover pcard ${opts.me ? 'glow' : ''}" data-action="open-profile" data-id="${m.id}" tabindex="0">
-      ${Avatar(m, 76, { status: true, emo: av ? AVAIL[av].e : '' })}
-      <div style="min-width:0">
-        <div class="nm">${esc(m.nick)} ${m.captain ? '<span title="Captain">👑</span>' : ''}</div>
-        ${StatusText(m.id)}
-        <div>${m.captain ? '<span class="role cap">👑 Captain</span> ' : ''}${SourceTag(m)}</div>
-      </div>
-      <div><div class="mini-h">FACEIT</div>${LevelBadge(lvl)}</div>
-      <div class="pr-col"><div class="mini-h">PREMIER</div><div class="pr mono">${(m.premier ? m.premier.toLocaleString('en-US') : '—')}</div></div>
-    </div>`;
-  }
 
   function MatchRow(x, opts = {}) {
     const mp = API().mapInfo(x.map);
@@ -331,5 +316,5 @@
       </div>`);
   }
 
-  window.BerxUI = { esc, icon, timeAgo, fmtDate, pad, AVAIL, PRES, NAV, Avatar, StatusText, DemoTag, SourceTag, Sidebar, Header, NotificationCenter, Hero, SectionTitle, CardHead, StatTile, Ring, LevelBadge, PlayerCard, MatchRow, WLChip, LineChart, Donut, AwardCard, Modal, ProfileModal };
+  window.BerxUI = { esc, icon, timeAgo, fmtDate, pad, AVAIL, PRES, NAV, Avatar, StatusText, DemoTag, SourceTag, Sidebar, Header, NotificationCenter, Hero, SectionTitle, CardHead, StatTile, Ring, LevelBadge, MatchRow, WLChip, LineChart, Donut, AwardCard, Modal, ProfileModal };
 })();

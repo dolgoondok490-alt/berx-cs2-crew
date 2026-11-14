@@ -86,6 +86,12 @@ CS2_DIR=C:\cs2-server
 | CT/T баг → "Серверт хэрэгжүүлэх" | `game\csgo\berx_match.json` бичээд `matchzy_loadmatch`. MatchZy тоглогчийг SteamID64-өөр нь зөв багт оруулна, жагсаалтад байхгүй хүнийг оруулахгүй |
 | Оноо, Live/Finished | MatchZy event-ээс (`going_live`, `round_end`, `map_result`) |
 
+## Map pool (7): Mirage, Dust II, Inferno, Nuke, Ancient, Anubis, Cache
+* Cache 2026 оны 4-р сарын 28-нд CS2-т албан ёсоор (`de_cache`) нэмэгдсэн тул Workshop хэрэггүй. Сервер тэрнээс хойш **шинэчлэгдсэн** байх ёстой (`install-cs2.ps1` дахин ажиллуулах эсвэл SteamCMD `app_update 730 validate`).
+* Agent map бүр серверт суусан эсэхийг шалгана: `CS2_DIR\game\csgo\maps\<map>.vpk` (CS2_DIR тохируулсан бол), эсвэл RCON `maps *`. Суугаагүй map сайт дээр **«Серверт алга»** гэж харагдаж, admin «Серверт тавих» товч идэвхгүй болно.
+* `CS2_DIR` нь `game\csgo` хавтсыг агуулсан зам. SteamCMD-ээр суулгасан бол: `C:\cs2-server\steamcmd\steamapps\common\Counter-Strike Global Offensive`.
+* (Заавал биш) Суугаагүй map-ыг Workshop-оос ачаалах: `agent\.env`-д `WORKSHOP_CACHE=<id>` → `host_workshop_map <id>`.
+
 ## Алдаа засах
 * **"SERVER_AGENT_SECRET Vercel дээрхтэй таарахгүй"**: хоёр газар ижил эсэхийг шалгаад Vercel-ээ Redeploy хий.
 * **"RCON холбогдсонгүй"**: сервер `-usercon`-той асаагүй, эсвэл `rcon_password` agent/.env-тэй таарахгүй байна.

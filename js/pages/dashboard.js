@@ -24,7 +24,7 @@
     const invYes = inv ? Object.values(inv.responses).filter(v => v === 'yes').length : 0;
 
     return `
-      ${U.Hero({ kicker: 'CS2 · PREMIER · FACEIT · LAN', title: 'BERX', accent: 'CS2 CREW' })}
+      ${U.Hero({ kicker: 'CS2 · PREMIER · FACEIT · LAN', title: 'BERX', accent: 'CS2 CREW', logo: true })}
       <div class="dash-grid">
         <div class="card tonight">
           <div class="row" style="align-items:flex-start;gap:16px">
@@ -60,16 +60,6 @@
             <button class="btn outline block mt" data-action="go" data-route="invite" data-inv="${inv.id}">Live lobby харах ${icon('arrow')}</button>
           ` : `<div class="empty-state"><div class="e">📭</div>Идэвхтэй урилга алга.<br><button class="btn primary mt" data-action="go" data-route="invite">${icon('plus')} Урилга үүсгэх</button></div>`}
         </div>
-
-        <div class="card crew-card">
-          ${CardHead('crew', `BERX баг <span class="muted" style="font-weight:500">(Онлайн ${mems.filter(m => A.presenceOf(m.id).site === 'online').length})</span>`, `<a class="link" href="#crew">Бүгд ${icon('arrow').replace('<svg', '<svg style="width:13px"')}</a>`)}
-          <div class="list-rows">
-            ${mems.slice(0, 6).map(m => `<button class="lr" style="text-align:left" data-action="open-profile" data-id="${m.id}">${Avatar(m, 36, { status: true })}
-              <div style="flex:1;min-width:0"><div class="nm">${esc(m.nick)}</div>${U.StatusText(m.id)}</div>
-              <span style="font-size:18px" title="${avail[m.id] ? AVAIL[avail[m.id]].s : 'Хариулаагүй'}">${avail[m.id] ? AVAIL[avail[m.id]].e : '<span class="dim" style="font-size:12px">—</span>'}</span>
-              <span class="premier mono" style="font-weight:800">${(m.premier / 1000).toFixed(1)}k</span></button>`).join('')}
-          </div>
-        </div>
       </div>
 
       <div class="grid mt cols" style="--c:1.25fr 1fr">
@@ -104,9 +94,8 @@
       </div>
 
       <div class="shortcuts mt">
-        <a class="card hover shortcut" href="#leaderboard"><div class="txt">${icon('trophy', 'accent').replace('<svg', '<svg style="width:22px"')}<h3>Leaderboard</h3><p>BERX багийн дотоод чансаа</p></div><div class="art" style="--img:url(${window.BERX_MOCK.abs('assets/art/crown.jpg')})"></div></a>
-        <a class="card hover shortcut" href="#awards"><div class="txt">${icon('crown', 'accent').replace('<svg', '<svg style="width:22px"')}<h3>Awards</h3><p>CARRY, AIM GOD, MVP... мөн BOT, AFK KING 😈</p></div><div class="art" style="--img:url(${window.BERX_MOCK.abs('assets/art/chicken.jpg')})"></div></a>
-        <a class="card hover shortcut" href="#fun"><div class="txt">${icon('game', 'accent').replace('<svg', '<svg style="width:22px"')}<h3>Хөгжилдөх өрөө</h3><p>Map roulette, quiz, random challenge</p></div><div class="art" style="--img:url(${window.BERX_MOCK.abs('assets/art/dice.jpg')})"></div></a>
+        <a class="card hover shortcut" href="#leaderboard"><div class="txt">${icon('trophy', 'accent').replace('<svg', '<svg style="width:22px"')}<h3>Leaderboard</h3><p>BERX багийн дотоод чансаа</p></div><div class="art" style="--img:url(${window.BERX_MOCK.abs('assets/art/counter-strike--9192-1280.webp')})"></div></a>
+        <a class="card hover shortcut" href="#awards"><div class="txt">${icon('crown', 'accent').replace('<svg', '<svg style="width:22px"')}<h3>Awards</h3><p>CARRY, AIM GOD, MVP... мөн BOT, AFK KING 😈</p></div><div class="art" style="--img:url(${window.BERX_MOCK.abs('assets/art/counter-strike--9192-1280.webp')})"></div></a>
       </div>`;
   }
 
