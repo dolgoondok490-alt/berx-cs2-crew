@@ -8,8 +8,10 @@
     "start": "node berx-agent.js",
     "check-skins-schema": "node skins-sync.js --check-schema"
   },
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "optionalDependencies": {
-    "mysql2": "3.11.5"
+    "mysql2": "3.24.6"
   }
 }
