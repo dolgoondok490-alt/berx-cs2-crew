@@ -28,9 +28,8 @@ if (Test-Path $envSkins) { (Get-Content $envSkins) -replace '^SKINS_SYNC_ENABLED
 
 if ($DropDatabase) {
   Confirm-Typed 'DROP' "$($BERX.DbName) DB болон $($BERX.DbPluginUser)/$($BERX.DbAgentUser) хэрэглэгчдийг устгана. Сонголтууд (loadout) сайтын Supabase-д хэвээр үлдэнэ."
-  $sec = Read-Host 'MariaDB root нууц үг' -AsSecureString
-  $root = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
-  Invoke-Mysql 'root' $root "DROP DATABASE IF EXISTS ``$($BERX.DbName)``; DROP USER IF EXISTS '$($BERX.DbPluginUser)'@'localhost', '$($BERX.DbPluginUser)'@'127.0.0.1', '$($BERX.DbAgentUser)'@'localhost', '$($BERX.DbAgentUser)'@'127.0.0.1';" | Out-Null
+  $rootCred = New-Object System.Management.Automation.PSCredential('root', (Read-Host 'MariaDB root нууц үг' -AsSecureString))
+  Invoke-Mysql $rootCred "DROP DATABASE IF EXISTS ``$($BERX.DbName)``; DROP USER IF EXISTS '$($BERX.DbPluginUser)'@'localhost', '$($BERX.DbPluginUser)'@'127.0.0.1', '$($BERX.DbAgentUser)'@'localhost', '$($BERX.DbAgentUser)'@'127.0.0.1';" | Out-Null
   Ok 'DB, хэрэглэгчид устгагдлаа'
 }
 Write-Host "`nRollback дууслаа. Launcher-ээр серверээ START хийнэ үү. Сайт дээр Vercel env SKINS_ENABLED / SKINS_SYNC_ENABLED-ийг устгана уу (README)." -ForegroundColor Cyan

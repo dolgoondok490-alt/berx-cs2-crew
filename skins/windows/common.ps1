@@ -68,7 +68,14 @@ function Find-MysqlClient {
 }
 
 # Нууц үгийг командын мөрөнд гаргахгүйн тулд түр defaults файл (зөвхөн одоогийн хэрэглэгч уншина)
-function Invoke-Mysql([string]$User, [string]$Password, [string]$Sql, [string]$Database = '') {
+function New-DbCredential([string]$User, [string]$Plain) {
+  $ss = New-Object System.Security.SecureString
+  foreach ($ch in $Plain.ToCharArray()) { $ss.AppendChar($ch) }
+  $ss.MakeReadOnly()
+  New-Object System.Management.Automation.PSCredential($User, $ss)
+}
+function Invoke-Mysql([System.Management.Automation.PSCredential]$Credential, [string]$Sql, [string]$Database = '') {
+  $User = $Credential.UserName; $Password = $Credential.GetNetworkCredential().Password
   $client = Find-MysqlClient
   if (-not $client) { throw 'mysql.exe олдсонгүй (MariaDB/MySQL client)' }
   $cnf = Join-Path $env:TEMP ("berx-" + [guid]::NewGuid().ToString('N') + '.cnf')

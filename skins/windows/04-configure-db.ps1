@@ -7,8 +7,7 @@
 #   • agent\.env.skins ШИНЭЭР (байгаа бол хөндөхгүй), SKINS_SYNC_ENABLED=0. agent\.env-ийг ХӨНДӨХГҮЙ.
 . "$PSScriptRoot\common.ps1"
 Protect-Dir $BERX.WorkDir; Protect-Dir $BERX.SecretsDir
-$sec = Read-Host 'MariaDB root нууц үг' -AsSecureString
-$root = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
+$rootCred = New-Object System.Management.Automation.PSCredential('root', (Read-Host 'MariaDB root нууц үг' -AsSecureString))
 
 $secretsFile = Join-Path $BERX.SecretsDir 'db-users.json'
 if (Test-Path $secretsFile) { $s = Get-Content $secretsFile -Raw | ConvertFrom-Json; $pluginPw = $s.plugin; $agentPw = $s.agent; Info 'Өмнө үүсгэсэн нууц үгийг ашиглана' }
@@ -26,14 +25,15 @@ GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX ON ``$db``.* TO '$($B
 GRANT SELECT, INSERT, UPDATE, DELETE ON ``$db``.* TO '$($BERX.DbAgentUser)'@'localhost', '$($BERX.DbAgentUser)'@'127.0.0.1';
 FLUSH PRIVILEGES;
 "@
-Invoke-Mysql 'root' $root $sql | Out-Null; Ok "DB $db, $($BERX.DbPluginUser), $($BERX.DbAgentUser)"
+Invoke-Mysql $rootCred $sql | Out-Null; Ok "DB $db, $($BERX.DbPluginUser), $($BERX.DbAgentUser)"
 
 Step 'WeaponPaints schema (build-472)'
 $schema = Get-Content (Join-Path $PSScriptRoot '..\sql\weaponpaints-build-472-schema.sql') -Raw
-Invoke-Mysql $BERX.DbPluginUser $pluginPw $schema $db | Out-Null
-$tables = Invoke-Mysql $BERX.DbAgentUser $agentPw "SHOW TABLES" $db
+$pluginCred = New-DbCredential $BERX.DbPluginUser $pluginPw; $agentCred = New-DbCredential $BERX.DbAgentUser $agentPw
+Invoke-Mysql $pluginCred $schema $db | Out-Null
+$tables = Invoke-Mysql $agentCred "SHOW TABLES" $db
 Ok "Хүснэгтүүд: $($tables -join ', ')"
-$denied = $false; try { Invoke-Mysql $BERX.DbAgentUser $agentPw "DROP TABLE wp_player_pins" $db | Out-Null } catch { $denied = $_.Exception.Message -match 'denied' }
+$denied = $false; try { Invoke-Mysql $agentCred "DROP TABLE wp_player_pins" $db | Out-Null } catch { $denied = $_.Exception.Message -match 'denied' }
 if ($denied) { Ok "$($BERX.DbAgentUser) DROP хийж чадахгүй (хамгийн бага эрх)" } else { Bad "$($BERX.DbAgentUser) хэт их эрхтэй байна!"; exit 1 }
 
 Step 'Тохиргооны файлууд'
@@ -66,5 +66,5 @@ SKINS_REFRESH=1
   icacls $envSkins /inheritance:r /grant:r "$($env:USERNAME):(R,W)" "*S-1-5-32-544:F" "*S-1-5-18:F" | Out-Null
   Ok "agent\.env.skins үүслээ (SKINS_SYNC_ENABLED=0 — асаах нь README-ийн алхмаар)"
 }
-$root = $null; [GC]::Collect()
+$rootCred = $null
 Write-Host "`nНууц үгс: $secretsFile (зөвхөн таны хэрэглэгч уншина). Дараагийн алхам: 07-verify-schema.ps1" -ForegroundColor Cyan
