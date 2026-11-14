@@ -37,7 +37,7 @@ namespace BerxLauncher.UI
         readonly Card infoCard = new Card { Title = "Систем" };
         readonly InfoList info = new InfoList();
         readonly StatusCard cWg = new StatusCard { Title = "WIREGUARD", Glyph = "" };
-        readonly StatusCard cServer = new StatusCard { Title = "CS2 DEDICATED SERVER", Glyph = "" };
+        readonly StatusCard cServer = new StatusCard { Title = "CS2 SERVER", Glyph = "" };
         readonly StatusCard cAgent = new StatusCard { Title = "BERX AGENT", Glyph = "" };
         readonly StatusCard cRcon = new StatusCard { Title = "RCON", Glyph = "" };
         readonly Card metricsCard = new Card { Title = "Live" };
@@ -307,6 +307,8 @@ namespace BerxLauncher.UI
                 btnStart.Text = online ? "SERVER ONLINE" : "START SERVER";
                 btnStart.Sub = online ? "Бүх хэсэг ажиллаж байна" : (s != null && s.Server == CompState.Running ? "Дутуу хэсгийг асаана" : "WireGuard → CS2 → RCON → Agent");
                 btnStart.Glyph = online ? "" : "";
+                btnStart.Style = online ? FlatButton.Kind.Success : FlatButton.Kind.Primary;
+                btnStart.Invalidate();
             }
             btnStop.Enabled = !busy && anything;
             btnRestart.Enabled = !busy && s != null && s.Server == CompState.Running;
