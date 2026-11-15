@@ -118,6 +118,7 @@
     { id: 'leaderboard', label: 'Leaderboard', ic: 'trophy' },
     { id: 'awards', label: 'Awards', ic: 'crown' },
     { id: 'server', label: 'SERVER', ic: 'server' },
+    { id: 'matches', label: 'Тоглолтын түүх', ic: 'history' },
     { id: 'skins', label: 'SKIN INVENTORY', ic: 'skins', feature: 'skins' }
   ];
   const navItems = () => NAV.filter(n => !n.feature || (API().features && API().features()[n.feature]));

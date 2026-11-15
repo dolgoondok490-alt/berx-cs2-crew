@@ -19,7 +19,7 @@ const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 
-const VERSION = '1.3.2';
+const VERSION = '1.4.0';
 
 /* ---------- тохиргоо ---------- */
 (function loadEnv() {
@@ -221,6 +221,8 @@ http.createServer((req, res) => {
     else if (ev === 'map_result' || ev === 'series_end') { state.phase = 'finished'; scoreFrom(); }
     else if (ev === 'series_start' || ev === 'match_config_load' || ev === 'knife_round_start') { state.phase = ev === 'knife_round_start' ? 'live' : 'warmup'; state.score = { ct: 0, t: 0 }; }
     else if (ev === 'map_picked' || ev === 'side_picked') { /* ignore */ }
+    // Тоглолтын түүх: Competitive-ийн дүн, хил нь MatchZy-ийн өөрийнх (AIM-д MatchZy унтраалттай)
+    if (!arena.aim && matchHistory) matchHistory.onMatchZy(e, { map: state.map });
     heartbeat().catch(() => {});
   });
 }).listen(CFG.eventsPort, '127.0.0.1', () => log(`✓ MatchZy event сонсож байна: 127.0.0.1:${CFG.eventsPort}`))
@@ -344,14 +346,27 @@ async function startAimLog() {
     arena.log = { token: crypto.randomBytes(12).toString('hex'), wasOn: /currently logging to/i.test(st) && !/not currently logging/i.test(st) };
   }
   await rcon.exec('log on');
+  // ADR: "attacked" (damage) мөр log-д гарахын тулд mp_logdetail 3 (зөвхөн log-ийн тохиргоо, тоглоомд нөлөөгүй). Гарахад сэргээнэ.
+  if (process.env.MATCH_DAMAGE_LOG !== '0' && arena.log.logdetail === undefined) {
+    const v = arenaLib.parseCvar(await rcon.exec('mp_logdetail').catch(() => ''), 'mp_logdetail');
+    arena.log.logdetail = /^[0-3]$/.test(String(v)) ? String(v) : null; saveArena();
+    if (arena.log.logdetail !== null) await rcon.exec('mp_logdetail 3');
+  }
   await rcon.exec(safe(`logaddress_add_http "${logUri()}"`));
 }
 function stopAimLogCommands() {
   if (!arena.log) return [];
-  return [safe(`logaddress_del_http "${logUri()}"`), ...(arena.log.wasOn ? [] : ['log off'])];
+  return [safe(`logaddress_del_http "${logUri()}"`), ...(/^[0-3]$/.test(String(arena.log.logdetail ?? '')) ? [`mp_logdetail ${arena.log.logdetail}`] : []), ...(arena.log.wasOn ? [] : ['log off'])];
 }
 // Log мөр бүр: round-ын оноо, тоглолт дууссан, дахин эхэлсэн
+// Тоглолтын түүхэд өгөх AIM-ийн мэдээлэл (map дээр гарсан + тохиргоо хийгдэж/бэлэн үед л)
+function aimCtx() {
+  const w = arena.workshop, a = arena.aim; if (!a || !w || w.purpose !== 'aim' || !['configuring', 'ready'].includes(w.phase)) return null;
+  const entry = wsEntry(a.map); if (!entry) return null;
+  return { mode: a.size === 2 ? 'aim2v2' : 'aim1v1', map: state.map || entry.mapName, workshop_id: entry.workshopId, aim_weapon: a.weapon, target_rounds: a.rounds };
+}
 function onCs2Log(body) {
+  if (matchHistory) { try { matchHistory.onLog(body, { aim: aimCtx() }); } catch (e) { log('⚠ Тоглолтын түүх (log):', e.message); } }
   if (!arena.aim) return;
   let changed = false, guard = false;
   for (const line of String(body).split(/\r?\n/)) {
@@ -671,6 +686,7 @@ async function tick() {
       } catch (e) { log('⚠ Төлөв уншихад алдаа:', e.message); }
     } else { state.players = []; state.statusOk = false; }
     try { await arenaTick(); } catch (e) { log('⚠ Workshop/AIM:', e.message); }
+    if (matchHistory) { try { matchHistory.tick({ players: state.statusOk ? state.players : [], map: state.statusOk ? state.map : null, online: state.online, aim: !!arena.aim }); } catch (e) { log('⚠ Тоглолтын түүх:', e.message); } }
     await heartbeat();
     const poll = await api('poll');
     if (poll.teams) lastTeams = { teams: poll.teams, version: poll.teamsVersion };
@@ -687,6 +703,19 @@ async function tick() {
   finally { busy = false; }
 }
 
+/* ---------- Тоглолтын түүх (MATCH_HISTORY=0 бол унтраалттай) ---------- */
+// Хариуны статусыг буцаана (алдаа шидэхгүй) — дараалал 2xx/4xx/5xx-ийг өөрөөр шийднэ
+async function postMatch(match) {
+  const r = await fetch(CFG.site + '/api/server/agent/matches', {
+    method: 'POST', headers: { Authorization: 'Bearer ' + CFG.secret, 'Content-Type': 'application/json', 'User-Agent': 'berx-agent/' + VERSION, ...PREVIEW_HEADERS },
+    body: JSON.stringify({ match }), redirect: IS_PREVIEW ? 'error' : 'follow', signal: AbortSignal.timeout(15000)
+  });
+  return { status: r.status, error: r.ok ? '' : (await r.text().catch(() => '')).slice(0, 200) };
+}
+let matchHistory = null;
+try { matchHistory = require('./match-history').createMatchHistory({ env: process.env, version: VERSION, log, send: postMatch }); if (!matchHistory.enabled) matchHistory = null; }
+catch (e) { log('✖ Тоглолтын түүхийн модуль ачаалагдсангүй:', e.message); }
+
 /* ---------- SKIN INVENTORY синк (заавал биш, анхдагчаар унтраалттай) ---------- */
 let skins = null;
 try {
@@ -702,6 +731,7 @@ let stopping = false;
 const bye = async () => {
   if (stopping) return; stopping = true;
   log('Зогсож байна... (сайтад offline илгээнэ)'); state.online = false; state.players = [];
+  if (matchHistory) matchHistory.save();
   try { await Promise.race([heartbeat(), new Promise(r => setTimeout(r, 5000))]); } catch (e) { /* ignore */ }
   process.exit(0);
 };

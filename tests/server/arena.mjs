@@ -69,7 +69,7 @@ ok(!JSON.stringify(await get(A)).includes(RCON_PW) && !JSON.stringify(await get(
 /* ===================== 2. Agent асаах ===================== */
 console.log('\n== Agent v1.3.2');
 const ARENA_STATE = path.join(tmp, 'arena-state.json');
-const agentEnv = { BERX_AGENT_ENV: path.join(tmp, 'agent.env'), BERX_ARENA_STATE: ARENA_STATE, ARENA_VERIFY_MS: '5000', ARENA_CONFIG_TIMEOUT_MS: '12000' };
+const agentEnv = { BERX_AGENT_ENV: path.join(tmp, 'agent.env'), BERX_ARENA_STATE: ARENA_STATE, BERX_MATCHES_STATE: path.join(tmp, 'matches.json'), ARENA_VERIFY_MS: '5000', ARENA_CONFIG_TIMEOUT_MS: '12000' };
 fs.writeFileSync(path.join(tmp, 'agent.env'), `BERX_URL=http://127.0.0.1:${sitePort}\nSERVER_AGENT_SECRET=${SECRET}\nRCON_HOST=127.0.0.1\nRCON_PORT=${rconPort}\nRCON_PASSWORD=${RCON_PW}\nEVENTS_PORT=${evPort}\nPOLL_MS=2000\nPUBLIC_ADDRESS=203.0.113.5:27015\nCS2_DIR=${CS2}\n`);
 const agentLog = path.join(tmp, 'agent.log');
 let agent = run([path.join(ROOT, 'agent/berx-agent.js')], agentEnv, agentLog);

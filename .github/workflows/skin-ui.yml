@@ -1,7 +1,7 @@
 name: BERX SKIN INVENTORY UI v2
 on:
   push:
-    branches: ['skin-ui-v2', 'main', 'skin-team-filter-admin-settings']
+    branches: ['skin-ui-v2', 'main', 'skin-team-filter-admin-settings', 'berx-match-history-v1']
     paths: ['js/**', 'css/**', 'index.html', 'assets/**', 'lib/**', 'agent/**', 'server/**', 'tests/skins/**', 'tools/build-weapon-assets.py', '.github/workflows/skin-ui.yml']
   workflow_dispatch:
 permissions:

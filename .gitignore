@@ -14,3 +14,5 @@ agent/.env.skins
 agent/node_modules/
 skins/windows/secrets/
 agent/.berx-arena-state.json
+agent/.berx-matches.json
+agent/.berx-matches.json.tmp

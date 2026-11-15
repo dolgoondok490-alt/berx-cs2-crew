@@ -1,0 +1,76 @@
+/* BERX Match History — Тоглолтын түүх, дэлгэрэнгүй, профайлын BERX таб (одоогийн BERX token-уудаар) */
+.mh-tabs { margin-bottom: 16px; }
+.mh-list { padding: 14px; }
+.mh-list .card-h { margin-bottom: 8px; }
+.mh-row { width: 100%; display: grid; grid-template-columns: 112px minmax(0, 1.3fr) auto minmax(0, 1fr) 118px; align-items: center; gap: 14px; padding: 9px; border-radius: 11px;
+  text-align: left; border: 1px solid transparent; transition: background .15s, border-color .15s; color: inherit; }
+.mh-row + .mh-row { margin-top: 4px; }
+.mh-row:hover, .mh-row:focus-visible { background: rgba(255, 255, 255, .035); border-color: var(--line); outline: none; }
+.mh-row:focus-visible { border-color: rgba(255, 106, 0, .55); }
+.mh-thumb { height: 56px; border-radius: 9px; background: var(--img, linear-gradient(135deg, #3a3f46, #1c1e22)) center/cover; position: relative; overflow: hidden; }
+.mh-thumb::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0, 0, 0, .05), rgba(0, 0, 0, .35)); }
+.mh-main { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.mh-main b { font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mh-sub { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 11.5px; }
+.mh-mode { font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 6px; background: rgba(255, 255, 255, .06); color: #ddd; border: 1px solid var(--line-2); }
+.mh-mode.competitive { color: #ffd2ad; background: var(--accent-soft); border-color: rgba(255, 106, 0, .35); }
+.mh-mode.aim1v1, .mh-mode.aim2v2 { color: #cfe3ff; background: rgba(90, 150, 255, .1); border-color: rgba(90, 150, 255, .3); }
+.mh-score { display: inline-flex; align-items: baseline; gap: 6px; font-family: var(--font-display); font-style: italic; font-weight: 900; font-size: 24px; letter-spacing: -.01em; }
+.mh-score i { color: var(--dim); font-style: normal; font-size: 18px; }
+.mh-score b { color: var(--muted); }
+.mh-score b.ct.won { color: #8cc4ff; }
+.mh-score b.t.won { color: #ffc46b; }
+.mh-meta { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; min-width: 0; }
+.mh-meta span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mh-res { justify-self: end; font-size: 11.5px; font-weight: 800; padding: 5px 10px; border-radius: 8px; white-space: nowrap; border: 1px solid var(--line-2); background: rgba(255, 255, 255, .05); color: var(--muted); }
+.mh-res.win { color: var(--win); background: rgba(57, 210, 122, .12); border-color: rgba(57, 210, 122, .35); }
+.mh-res.loss { color: var(--loss); background: rgba(239, 75, 75, .12); border-color: rgba(239, 75, 75, .35); }
+.mh-res.draw { color: #ddd; }
+.mh-res.side.ct { color: #8cc4ff; border-color: rgba(140, 196, 255, .3); }
+.mh-res.side.t { color: #ffc46b; border-color: rgba(255, 196, 107, .3); }
+.mh-res.st.aborted, .mh-res.st.interrupted { color: #ffd99a; background: rgba(255, 186, 60, .1); border-color: rgba(255, 186, 60, .3); }
+.mh-more { display: flex; justify-content: center; padding-top: 12px; }
+
+/* дэлгэрэнгүй */
+.overlay.mh-still, .overlay.mh-still .modal { animation: none; }
+.modal.lg { width: min(1040px, 100%); }
+.mh-hero { position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding: 64px 26px 22px; min-height: 170px;
+  background: linear-gradient(180deg, rgba(10, 10, 12, .2), rgba(10, 10, 12, .92)), var(--img, linear-gradient(135deg, #2b2e35, #121316)) center/cover; border-bottom: 1px solid var(--line-2); }
+.mh-hero h2 { margin: 8px 0 4px; font-size: 34px; overflow-wrap: anywhere; }
+.mh-hero-in { min-width: 0; }
+.mh-final { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.mh-final .mh-score { font-size: 46px; }
+.mh-final .mh-score i { font-size: 30px; }
+.mh-teams { display: grid; gap: 18px; }
+.mh-team { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: rgba(0, 0, 0, .18); }
+.mh-team-h { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.mh-team.ct .mh-team-h { background: linear-gradient(90deg, rgba(90, 150, 255, .14), transparent); }
+.mh-team.t .mh-team-h { background: linear-gradient(90deg, rgba(255, 170, 60, .14), transparent); }
+.mh-team-s { margin-left: auto; font-family: var(--font-display); font-style: italic; font-weight: 900; font-size: 22px; }
+.mh-team.ct .mh-team-s { color: #8cc4ff; } .mh-team.t .mh-team-s { color: #ffc46b; }
+.mh-table td, .mh-table th { padding: 8px 12px; }
+.mh-table th:not(:first-child), .mh-table td:not(:first-child) { text-align: right; width: 64px; }
+.mh-table tr.me td { background: rgba(255, 106, 0, .09); }
+.mh-table tr.me td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.mh-pl { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.mh-pl > span { white-space: nowrap; }
+.mh-av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: #2a2c31; color: #ccc; font-weight: 800; font-size: 13px; flex: none; }
+
+@media (max-width: 960px) {
+  .mh-row { grid-template-columns: 84px minmax(0, 1fr) auto; grid-template-areas: 'th main score' 'th meta res'; row-gap: 6px; }
+  .mh-thumb { grid-area: th; height: 64px; } .mh-main { grid-area: main; } .mh-score { grid-area: score; justify-self: end; font-size: 21px; }
+  .mh-meta { grid-area: meta; } .mh-res { grid-area: res; }
+}
+@media (max-width: 560px) {
+  .mh-tabs button { padding: 0 12px; }
+  .mh-row { grid-template-columns: 64px minmax(0, 1fr) auto; gap: 10px; padding: 8px 4px; }
+  .mh-thumb { height: 56px; }
+  .mh-meta { font-size: 11.5px; }
+  .mh-hero { flex-direction: column; align-items: flex-start; padding: 56px 16px 16px; }
+  .mh-hero h2 { font-size: 26px; }
+  .mh-final { align-self: center; }
+  .mh-final .mh-score { font-size: 38px; }
+  .mh-table th, .mh-table td { padding: 7px 6px; font-size: 12.5px; }
+  .mh-table th:not(:first-child), .mh-table td:not(:first-child) { width: 40px; }
+  .mh-table .mh-av, .mh-table .av { display: none; }
+}

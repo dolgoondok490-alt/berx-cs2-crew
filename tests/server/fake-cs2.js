@@ -25,7 +25,7 @@ const cv = {
   mp_ct_default_grenades: '', mp_t_default_grenades: '', mp_weapons_allow_map_placed: '0', mp_match_end_restart: '0', mp_match_restart_delay: '15',
   mp_respawn_on_death_ct: '0', mp_respawn_on_death_t: '0', sv_infinite_ammo: '0', mp_friendlyfire: '0', mp_warmup_pausetimer: '0',
   mp_winlimit: '0', mp_equipment_reset_rounds: '0',
-  mp_timelimit: '0', bot_dont_shoot: '0', sv_disable_immunity_alpha: '0', mp_respawn_immunitytime: '4', mp_warmup_online_enabled: '1'
+  mp_timelimit: '0', bot_dont_shoot: '0', sv_disable_immunity_alpha: '0', mp_respawn_immunitytime: '4', mp_warmup_online_enabled: '1', mp_logdetail: '0'
 };
 const S = { map: 'de_mirage', autostart: 1, busyUntil: 0, failNext: false, sleepAt: [], configLog: [], restarts: 0,
   logOn: false, logHttp: [], score: { ct: 0, t: 0 }, played: 0, over: false, noWinlimit: false, lockFreeze: false, gameOvers: 0,
@@ -112,6 +112,10 @@ function run(body) {
     setTimeout(() => { fs.mkdirSync(content, { recursive: true }); fs.writeFileSync(path.join(content, w[1] + '_dir.vpk'), 'vpk'); fs.writeFileSync(path.join(content, w[1] + '_000.vpk'), 'vpk'); fs.rmSync(dl, { recursive: true, force: true }); loadMap(mapName); }, ms - 100);
     return '';
   }
+  // MatchZy remote log (agent RCON-оор тохируулна) — бодит MatchZy шиг event-ийг энэ URL руу header-тэй илгээнэ
+  if (w[0] === 'matchzy_remote_log_url' && w[1]) { (S.mz ||= {}).url = c.match(/"([^"]+)"/)[1]; return ''; }
+  if (w[0] === 'matchzy_remote_log_header_key' && w[1]) { (S.mz ||= {}).key = c.match(/"([^"]+)"/)[1]; return ''; }
+  if (w[0] === 'matchzy_remote_log_header_value' && w[1]) { (S.mz ||= {}).value = c.match(/"([^"]+)"/)[1]; return ''; }
   if (w[0] === 'matchzy_autostart_mode') { if (w[1] !== undefined) S.autostart = +w[1]; return ''; }
   if (c === 'css_restart') { S.restarts++; return ''; }
   if (c === 'mp_restartgame 1') { log('#RESTARTGAME'); restartGame(); return ''; }
@@ -148,8 +152,14 @@ net.createServer(s => {
   s.on('data', d => { buf = Buffer.concat([buf, d]); pump(); });
 }).listen(+port, '127.0.0.1');
 
-http.createServer((req, res) => {
+http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x');
+  let body = ''; for await (const c of req) body += c;
+  // Тоглолтын түүхийн тест: MatchZy event, CS2 log мөр, серверийн тоглогчид
+  if (u.pathname === '/mz') { const r = S.mz && S.mz.url ? await fetch(S.mz.url, { method: 'POST', headers: { 'content-type': 'application/json', [S.mz.key]: S.mz.value }, body }).then(x => x.status).catch(() => 0) : 0; res.writeHead(200); return res.end(JSON.stringify({ status: r })); }
+  if (u.pathname === '/emit') { emit(JSON.parse(body)); res.writeHead(200); return res.end('{}'); }
+  if (u.pathname === '/emit-raw') { const t = body; for (const x of S.logHttp) await fetch(x, { method: 'POST', body: t }).catch(() => {}); res.writeHead(200); return res.end('{}'); }
+  if (u.pathname === '/set-players') { S.players = JSON.parse(body); res.writeHead(200); return res.end('{}'); }
   if (u.pathname === '/fail-next') S.failNext = true;
   if (u.pathname === '/round') playRound(u.searchParams.get('w'));
   if (u.pathname === '/rounds') { for (const x of (u.searchParams.get('seq') || '').split(',')) playRound(x); }

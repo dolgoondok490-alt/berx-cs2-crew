@@ -137,3 +137,19 @@ CS2_DIR=C:\cs2-server
 * **Тоглогчийн SteamID харагдахгүй / kick ажиллахгүй**: `DEBUG=1` болгоод agent-ийг асаа. `status_json keys:` мөрийг хуулж Claude-д үзүүл (CS2 update-ээр формат өөрчлөгдөж болно).
 * **Knife / баг түгжих / css_start ажиллахгүй**: MatchZy суугаагүй байна (`css_plugins list`).
 * **Найзууд холбогдож чадахгүй**: port forward 27015 UDP, Windows Firewall, GSLT token-оо шалга.
+
+## Тоглолтын түүх / Match History (agent v1.4.0)
+
+Агент хавтсанд **5 файл** хамт байна: `berx-agent.js`, `arena-modes.js`, `workshop-maps.json`, **`match-recorder.js`**, **`match-history.js`**
+(`agent\.env`, `agent\.env.skins`-д хүрэхгүй, шинэ тохиргоо заавал биш).
+
+* **Competitive 5v5** — MatchZy-ийн өөрийн event (`going_live` → `round_end` → `map_result`). Agent аль хэдийн
+  `matchzy_remote_log_url`-ийг `127.0.0.1:<EVENTS_PORT>/matchzy` (нууц header-тэй) болгож тохируулдаг — шинэ plugin хэрэггүй.
+  Статистик (kill/death/assist/HS/damage/MVP)-ийг MatchZy өөрөө тоолно. Warmup/knife round тоологдохгүй.
+* **AIM 1v1 / 2v2** — CS2 server log (AIM-д agent аль хэдийн `logaddress_add_http` хийдэг). ADR-д зориулж AIM-ийн үед
+  `mp_logdetail 3` (зөвхөн log-ийн тохиргоо) тавьж, AIM-аас гарахад өмнөх утгыг сэргээнэ. MVP log-д байхгүй тул бүртгэхгүй.
+* Дүн `agent\.berx-matches.json`-д хадгалагдаж (сүлжээ/сайт тасалдвал дараалалд), `POST /api/server/agent/matches`-ээр
+  (Bearer `SERVER_AGENT_SECRET`) илгээгдэнэ: 5с → 5 мин backoff, agent restart-ын дараа үргэлжилнэ.
+* Заавал биш тохиргоо: `MATCH_HISTORY=0` (бүрэн унтраах), `MATCH_DAMAGE_LOG=0` (AIM-д `mp_logdetail` хөндөхгүй, ADR-гүй),
+  `SERVER_ID=main`.
+* Суулгах, нөөцлөх, буцаах: `docs/match-history-install.md`.

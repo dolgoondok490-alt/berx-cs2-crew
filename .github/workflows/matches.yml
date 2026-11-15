@@ -1,0 +1,44 @@
+name: BERX MATCH HISTORY
+on:
+  push:
+    branches: ['berx-match-history-v1', 'main']
+    paths: ['lib/**', 'agent/**', 'server/**', 'js/**', 'css/**', 'index.html', 'supabase/**', 'tests/matches/**', 'tests/server/fake-cs2.js', 'tests/skins/fake-supabase.js', '.github/workflows/matches.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  matches:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres" --health-interval=5s --health-timeout=5s --health-retries=20
+    env: { PGHOST: 127.0.0.1, PGPORT: 5432, PGUSER: postgres, PGPASSWORD: postgres }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Syntax check
+        run: for f in agent/berx-agent.js agent/match-recorder.js agent/match-history.js lib/*.js js/pages/*.js js/app.js js/ui/*.js tests/server/fake-cs2.js tests/skins/fake-supabase.js; do node --check "$f" || exit 1; done
+      - name: Match recorder unit (MatchZy 0.9.2 events, CS2 log lines, queue, validation, aggregates)
+        run: node tests/matches/recorder-unit.mjs
+      - name: SQL migration on real PostgreSQL 16 (RLS, grants, idempotent ingest, rollback)
+        run: node tests/matches/sql.mjs
+      - name: End-to-end (site + BERX Agent + fake CS2/MatchZy + fake Supabase) — simulated events
+        run: node tests/matches/e2e.mjs
+      - name: Arena regression (agent v1.4.0 must not change Workshop/AIM/round guard)
+        run: node tests/server/arena-unit.mjs && node tests/server/arena.mjs
+      - name: Install Playwright (Chromium)
+        run: |
+          npm install --no-save --no-audit --no-fund --prefix /tmp/pw playwright@1.49.1
+          /tmp/pw/node_modules/.bin/playwright install --with-deps chromium
+      - name: Match History UI (desktop / mobile)
+        env: { PLAYWRIGHT: /tmp/pw/node_modules/playwright, SHOTS: /tmp/shots }
+        run: node tests/matches/ui.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: match-history-screenshots, path: /tmp/shots, retention-days: 7 }
