@@ -5,7 +5,7 @@
   'use strict';
   const U = window.BerxUI, A = window.BerxAPI, S = window.BerxStore, PAGES = window.BerxPages;
   const { icon, esc, Avatar } = U;
-  const ROUTES = ['dashboard', 'invite', 'stats', 'leaderboard', 'awards', 'server', 'matches', 'skins', 'admin'];
+  const ROUTES = ['dashboard', 'invite', 'stats', 'leaderboard', 'awards', 'server', 'ranking', 'matches', 'skins', 'admin'];
   const root = document.getElementById('app');
 
   const App = window.BerxApp = {
@@ -269,6 +269,8 @@
     }
     App.booting = false;
     render();
+    // Зэрэглэл ахисан/буурсан бол нэг удаа мэдэгдэнэ (хаагдана, давтагдахгүй)
+    if (b && PAGES.ranking && PAGES.ranking.checkNotify) PAGES.ranking.checkNotify();
   }).catch(err => {
     console.error(err);
     App.booting = false;

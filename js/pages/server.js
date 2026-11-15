@@ -3,7 +3,14 @@
   'use strict';
   const U = window.BerxUI, A = window.BerxAPI, S = window.BerxStore;
   const { icon, esc, Avatar, CardHead } = U;
-  const ui = () => (window.BerxApp.ui.server ||= { data: null, loading: false, error: null, busy: {}, form: {}, tab: null, aim: { size: 1, weapon: 'ak47', rounds: 10 }, aimTouched: false });
+  const ui = () => (window.BerxApp.ui.server ||= { data: null, loading: false, error: null, busy: {}, form: {}, tab: null, aim: { size: 1, weapon: 'ak47', rounds: 10, ranked: false }, aimTouched: false });
+  const FIRST10 = 'First to 10 тоглолт BRP-д нөлөөлөхгүй.';
+  // Ranked/Casual сонгогч — боломжгүй бол яагаад гэдгийг Монголоор (сервер дахин шалгана)
+  function typeSeg(cur, action, disabledWhy) {
+    const btn = (v, l) => `<button class="${cur === v ? 'on' : ''}" data-action="${action}" data-v="${v}" ${v === 'ranked' && disabledWhy ? `disabled title="${esc(disabledWhy)}"` : ''}>${l}</button>`;
+    return `<div class="seg sm rk-type">${btn('casual', 'Энгийн тоглолт')}${btn('ranked', '🏅 Чансаатай тоглолт')}</div>`;
+  }
+  const typeChip = (ranked) => `<span class="mh-type ${ranked ? 'ranked' : 'casual'}">${ranked ? 'RANKED' : 'CASUAL'}</span>`;
   const PHASE = { warmup: ['Warmup', 'warn'], live: ['LIVE', 'win'], finished: ['Finished', ''], practice: ['Practice', 'accent'], unknown: ['—', ''] };
   const MODE = { competitive: 'Competitive 5v5', wingman: 'Wingman 2v2', '1v1': '1v1', practice: 'Practice' };
   const WS_PHASE = { requested: ['Хүсэлт илгээгдлээ', 'warn', 0], downloading: ['Workshop-оос татаж байна', 'warn', 1], loading: ['Map ачаалж байна', 'warn', 2],
@@ -111,12 +118,15 @@
     if (!list.length) return '<div class="dim" style="padding:14px 2px">AIM map тохируулаагүй байна.</div>';
     const agentOld = d.online && !ar;      // v1.3.0-аас өмнөх agent Workshop/AIM мэдээлэл илгээдэггүй
     const f = ui().aim;
-    if (aim && !ui().aimTouched) { f.size = aim.size; f.weapon = aim.weapon; f.rounds = aim.rounds; }
+    if (aim && !ui().aimTouched) { f.size = aim.size; f.weapon = aim.weapon; f.rounds = aim.rounds; f.ranked = !!aim.ranked; }
+    const rav = (d.ranked && d.ranked.aim) || { ok: false, why: 'Чансааны мэдээлэл алга' };
+    const rankWhy = +f.rounds === 10 ? FIRST10 : rav.ok ? null : rav.why;
+    if (rankWhy && f.ranked) f.ranked = false;
     const seg = (k, vals, lbl) => `<div class="seg sm">${vals.map(v => `<button class="${String(f[k]) === String(v) ? 'on' : ''}" data-action="aim-set" data-k="${k}" data-v="${v}">${esc(lbl(v))}</button>`).join('')}</div>`;
     const w = ar && ar.workshop;
     return `
       ${aim ? `<div class="aim-live">
-        <div style="flex:1;min-width:0"><div class="kpi-label">Идэвхтэй</div><div class="display" style="font-size:20px">${esc(aimLabel(aim))}</div>
+        <div style="flex:1;min-width:0"><div class="kpi-label">Идэвхтэй ${typeChip(aim.ranked)}</div><div class="display" style="font-size:20px">${esc(aimLabel(aim))}</div>
           <div class="dim" style="font-size:12px">${esc((list.find(m => m.id === aim.map) || { name: aim.map }).name)}${w && w.runtimeMap ? ` (${esc(w.runtimeMap)})` : ''}${w ? ' · ' + esc((WS_PHASE[w.phase] || [''])[0]) : ''}</div></div>
         ${d.server && d.server.score && !ar.result ? `<div class="aim-score"><span class="ct">CT</span><b class="ct">${d.server.score.ct}</b><span class="dim">:</span><b class="t">${d.server.score.t}</b><span class="t">T</span></div>` : ''}
       </div>
@@ -149,6 +159,8 @@
         <div class="adm-row"><span>Багийн хэмжээ</span>${seg('size', (d.catalog && d.catalog.sizes) || [1, 2], v => v + 'v' + v)}</div>
         <div class="adm-row"><span>Зэвсэг</span>${seg('weapon', Object.keys((d.catalog && d.catalog.weapons) || WEAPON_LABELS), v => WEAPON_LABELS[v] || v)}</div>
         <div class="adm-row"><span>Round</span>${seg('rounds', (d.catalog && d.catalog.rounds) || [10, 13, 16, 30, 60], v => 'First to ' + v)}</div>
+        <div class="adm-row"><span>Тоглолтын төрөл</span>${typeSeg(f.ranked ? 'ranked' : 'casual', 'aim-type', rankWhy)}</div>
+        ${rankWhy ? `<div class="dim rk-why" style="font-size:11.5px;margin:-2px 0 8px">🏅 ${esc(rankWhy)}</div>` : '<div class="dim rk-why" style="font-size:11.5px;margin:-2px 0 8px">🏅 Чансаатай: хожил +30 / хожигдол −30 BRP. Төрөл тоглолт эхлэхэд түгжигдэнэ.</div>'}
         <div class="dim" style="font-size:11.5px;margin:4px 0 10px">Bot байхгүй · team balance/limit OFF · freezetime 0 · round хооронд 1с · buy menu байхгүй · round бүр сонгосон зэвсэг, бүтэн сум, 100 HP, kevlar+helmet. Аль нэг баг N round хожиход дуусна (тал солихгүй, overtime байхгүй). MatchZy AIM-ийн үед унтаж, Competitive руу буцахад өмнөх тохиргоо сэргээгдэнэ.</div>
         <div class="row wrap" style="gap:8px">
           ${aim ? `<button class="btn primary" data-action="aim-rematch" ${online && w && ['ready', 'configuring', 'error'].includes(w.phase) ? '' : 'disabled'}>↻ Дахин тоглох (0:0) / тохиргоо хэрэгжүүлэх</button>`
@@ -244,6 +256,9 @@
             <button class="btn sm" data-action="srv-cmd" data-type="match_restart" ${dis}>↻ Restart</button>
             <button class="btn sm danger" data-action="srv-cmd" data-type="match_stop" ${dis}>■ Зогсоох</button>
           </div>
+          <h4 class="mt">Дараагийн тоглолтын төрөл ${typeChip(d.ranked && d.ranked.matchType === 'ranked')}</h4>
+          ${typeSeg(d.ranked && d.ranked.matchType === 'ranked' ? 'ranked' : 'casual', 'comp-type', d.ranked && !d.ranked.competitive.ok ? d.ranked.competitive.why : (!d.online ? 'Сервер offline' : null))}
+          <div class="dim rk-why" style="font-size:11.5px;margin-top:6px">${d.ranked && !d.ranked.competitive.ok ? '🏅 ' + esc(d.ranked.competitive.why) : '🏅 Чансаатай 5v5: хожил +150…+230, хожигдол −130…−200 (хувийн үзүүлэлтээр). Бүх 10 тоглогч Steam-ээ BERX-тэй холбосон байх ёстой.'}</div>
           <h4 class="mt">Bot</h4>
           <div class="row wrap" style="gap:6px">
             <button class="btn sm ct-btn" data-action="srv-cmd" data-type="bot_add" data-arg-team="CT" ${dis}>+ CT bot</button>
@@ -303,13 +318,19 @@
       cmd(type, { value: v }, (ui().data.commandTypes || {})[type]);
     },
     'srv-tab'(el) { ui().tab = el.dataset.tab === 'aim' ? 'aim' : 'competitive'; return true; },
-    'aim-set'(el) { const f = ui().aim, k = el.dataset.k; if (!['size', 'weapon', 'rounds'].includes(k)) return; f[k] = k === 'weapon' ? el.dataset.v : Number(el.dataset.v); ui().aimTouched = true; return true; },
+    'aim-set'(el) { const f = ui().aim, k = el.dataset.k; if (!['size', 'weapon', 'rounds'].includes(k)) return; f[k] = k === 'weapon' ? el.dataset.v : Number(el.dataset.v); if (k === 'rounds' && f.rounds === 10) f.ranked = false; ui().aimTouched = true; return true; },
+    'aim-type'(el) { const f = ui().aim; f.ranked = el.dataset.v === 'ranked' && f.rounds !== 10; ui().aimTouched = true; return true; },
+    'comp-type'(el) {
+      const v = el.dataset.v === 'ranked' ? 'ranked' : 'casual';
+      window.BerxApp.confirm(`Дараагийн Competitive тоглолтыг «${v === 'ranked' ? 'Чансаатай' : 'Энгийн'}» болгох уу? Төрөл тоглолт эхлэх (going live) үед түгжигдэнэ.`, () => cmd('match_type', { value: v }, 'Тоглолтын төрөл'));
+    },
     'aim-start'(el) {
       const f = ui().aim, map = el.dataset.map, m = wsList(ui().data).find(x => x.id === map) || { name: map };
-      window.BerxApp.confirm(`${m.name} дээр AIM ${f.size}v${f.size} (${WEAPON_LABELS[f.weapon]}, First to ${f.rounds}) эхлүүлэх үү? Одоогийн тоглолт зогсож, сервер Workshop map ачаална. Одоогийн серверийн тохиргоо хадгалагдаж, Competitive руу буцахад сэргээгдэнэ.`,
-        () => { ui().aimTouched = false; cmd('aim_start', { map, size: f.size, weapon: f.weapon, rounds: f.rounds }, 'AIM 1V1 эхлүүлэх'); });
+      window.BerxApp.confirm(`${m.name} дээр ${f.ranked && f.rounds !== 10 ? 'ЧАНСААТАЙ' : 'энгийн'} AIM ${f.size}v${f.size} (${WEAPON_LABELS[f.weapon]}, First to ${f.rounds}) эхлүүлэх үү? Одоогийн тоглолт зогсож, сервер Workshop map ачаална. Одоогийн серверийн тохиргоо хадгалагдаж, Competitive руу буцахад сэргээгдэнэ.`,
+        () => { ui().aimTouched = false; cmd('aim_start', { map, size: f.size, weapon: f.weapon, rounds: f.rounds, ranked: !!f.ranked && f.rounds !== 10 }, 'AIM 1V1 эхлүүлэх'); });
     },
-    'aim-rematch'() { const f = ui().aim; ui().aimTouched = false; cmd('aim_rematch', { size: f.size, weapon: f.weapon, rounds: f.rounds }, 'AIM дахин тоглох'); },
+    // Rematch = шинэ тоглолт (шинэ ID). Төрлийг тодорхой баталгаажуулж илгээнэ.
+    'aim-rematch'() { const f = ui().aim; ui().aimTouched = false; cmd('aim_rematch', { size: f.size, weapon: f.weapon, rounds: f.rounds, ranked: !!f.ranked && f.rounds !== 10 }, `AIM дахин тоглох (${f.ranked && f.rounds !== 10 ? 'Чансаатай' : 'Энгийн'})`); },
     'aim-stop'() {
       const map = document.getElementById('aim-back-map')?.value || 'mirage';
       window.BerxApp.confirm(`AIM-ийг дуусгаж, өмнөх серверийн тохиргоог сэргээн ${A.mapInfo(map).name} (Competitive) руу шилжих үү?`, () => { ui().tab = 'competitive'; cmd('aim_stop', { map }, 'Competitive руу буцах'); });

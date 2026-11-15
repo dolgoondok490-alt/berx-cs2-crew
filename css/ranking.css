@@ -1,0 +1,107 @@
+/* BERX RANKING — чансаа, зэрэглэлийн тэмдэг, Match History-ийн RANKED/CASUAL, admin чансаа (одоогийн BERX token-уудаар) */
+.rk-emblem { flex: none; display: block; filter: drop-shadow(0 4px 10px rgba(0, 0, 0, .45)); }
+
+/* Match History шошго */
+.mh-type { font-size: 10px; font-weight: 900; letter-spacing: .08em; padding: 3px 7px; border-radius: 6px; border: 1px solid var(--line-2); color: var(--muted); background: rgba(255, 255, 255, .04); white-space: nowrap; }
+.mh-type.ranked { color: #ffe9a8; background: linear-gradient(90deg, rgba(246, 184, 21, .18), rgba(255, 106, 0, .14)); border-color: rgba(246, 184, 21, .45); }
+.mh-type.ranked.review, .mh-type.ranked.error, .mh-type.ranked.pending { border-style: dashed; }
+.mh-type.ranked.not_eligible, .mh-type.ranked.rejected { opacity: .7; }
+.mh-endc { justify-self: end; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.mh-brp { font-size: 12px; font-weight: 800; }
+.rk-type button[disabled] { opacity: .45; cursor: not-allowed; }
+
+/* Ranking хуудас */
+.rk-flags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+.rk-top { grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr); gap: 16px; }
+.rk-mid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px; margin: 16px 0; }
+.rk-card { position: relative; overflow: hidden; padding: 20px; }
+.rk-card::before { content: ''; position: absolute; inset: -40% -20% auto auto; width: 70%; height: 140%; background: radial-gradient(closest-side, var(--rk-glow, rgba(255, 106, 0, .25)), transparent); pointer-events: none; }
+.rk-card-main { position: relative; display: flex; gap: 18px; align-items: center; }
+.rk-card-em { flex: none; }
+.rk-name { font-size: 34px; line-height: 1; margin: 4px 0 6px; overflow-wrap: anywhere; }
+.rk-brp { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.rk-brp b { font-size: 28px; font-weight: 900; }
+.rk-brp span { color: var(--muted); font-weight: 700; font-size: 13px; }
+.rk-next { margin-top: 6px; }
+.rk-bar { height: 8px; border-radius: 99px; background: rgba(255, 255, 255, .07); overflow: hidden; margin-top: 6px; }
+.rk-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--accent), #ffd27a); }
+.rk-stats { position: relative; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.rk-stats > div { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.rk-stats b { font-size: 18px; }
+.rk-stats .kpi-label { font-size: 10.5px; }
+.rk-recent { display: flex; flex-direction: column; gap: 4px; }
+.rk-rrow { display: grid; grid-template-columns: 86px minmax(0, 1fr) auto 96px; gap: 12px; align-items: center; padding: 8px; border-radius: 10px; border: 1px solid transparent; text-align: left; color: inherit; }
+.rk-rrow:hover, .rk-rrow:focus-visible { background: rgba(255, 255, 255, .035); border-color: var(--line); outline: none; }
+.rk-rrow .mh-res { justify-self: start; text-align: center; grid-area: auto; }
+.rk-rmain { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 13px; }
+.rk-rmain span { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rk-perf { display: flex; flex-direction: column; align-items: flex-end; font-size: 10.5px; }
+.rk-perf b { font-size: 14px; }
+.rk-delta { justify-self: end; font-weight: 900; font-size: 14px; }
+.rk-guide { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.rk-gitem { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 4px; border-radius: 11px; background: rgba(0, 0, 0, .2); border: 1px solid var(--line); text-align: center; }
+.rk-gitem div { display: flex; flex-direction: column; gap: 2px; }
+.rk-gitem b { font-size: 11.5px; letter-spacing: .04em; }
+.rk-gitem span { font-size: 10.5px; }
+.rk-rules { display: flex; flex-direction: column; gap: 10px; font-size: 12.5px; }
+.rk-rules > div { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 10px; }
+.rk-rules > div > span { color: var(--muted); }
+.rk-table td, .rk-table th { padding: 8px 10px; }
+.rk-table tr.me td { background: rgba(255, 106, 0, .09); }
+.rk-table tr.me td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.rk-table tr.unranked td { color: var(--muted); }
+.rk-pos { width: 48px; font-weight: 800; }
+.rk-pl { display: inline-flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; }
+.rk-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 800; letter-spacing: .04em; white-space: nowrap; }
+.rk-badge.rk-rookie b { color: #d9dee6; } .rk-badge.rk-hunter b { color: #6cf0a3; } .rk-badge.rk-reaper b { color: #c9a6ff; }
+.rk-badge.rk-dominator b { color: #ff9a4d; } .rk-badge.rk-immortal b { color: #ffd84d; }
+.rk-badge.unranked b { color: var(--dim); }
+.rk-unranked { margin-top: 12px; }
+.rk-unranked summary { cursor: pointer; color: var(--muted); font-size: 12.5px; padding: 6px 2px; }
+
+/* Профайл (ProfileModal) */
+.rk-prof { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 14px; margin-bottom: 14px; border-radius: 12px; border: 1px solid var(--line-2); background: linear-gradient(90deg, rgba(255, 255, 255, .04), transparent); min-height: 54px; }
+.rk-prof-main { display: flex; flex-direction: column; gap: 2px; min-width: 120px; }
+.rk-prof-main b { font-size: 20px; }
+.rk-prof-st { display: flex; gap: 16px; flex-wrap: wrap; flex: 1; }
+.rk-prof-st span { display: flex; flex-direction: column; }
+.rk-prof-st small { font-size: 10.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.rk-prof-links { display: flex; gap: 6px; }
+
+/* Зэрэглэл ахисан мэдэгдэл */
+.rk-up-em { display: flex; justify-content: center; margin: 8px 0 10px; animation: rkpop .6s var(--ease, ease) both; }
+.rk-up.up .rk-up-em .rk-emblem { filter: drop-shadow(0 0 22px rgba(255, 200, 80, .55)); }
+@keyframes rkpop { from { transform: scale(.6) rotate(-8deg); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* Admin → Чансаа */
+.rk-sum { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.rk-sum > div { display: flex; flex-direction: column; gap: 4px; }
+.rk-sum b { font-size: 20px; }
+.rka-item { display: flex; gap: 14px; align-items: flex-start; padding: 10px 4px; border-top: 1px solid var(--line); flex-wrap: wrap; }
+.rka-prop { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.rka-ledger { display: flex; flex-direction: column; gap: 2px; max-height: 340px; overflow: auto; font-size: 12.5px; }
+.rka-ledger > div { display: grid; grid-template-columns: 70px 110px minmax(0, 1fr) auto; gap: 8px; padding: 5px 2px; border-bottom: 1px solid var(--line); align-items: center; }
+.rka-ledger > div > span:nth-child(3) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 1100px) { .rk-top, .rk-mid { grid-template-columns: 1fr; } }
+@media (max-width: 960px) { .mh-endc { grid-area: res; } }
+@media (max-width: 760px) {
+  .rk-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .rk-guide { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .rk-sum { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .rk-card-main { flex-direction: column; text-align: center; }
+  .rk-brp, .rk-card-main .kpi-label { justify-content: center; }
+  .rk-name { font-size: 28px; }
+  .rk-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rk-rrow { grid-template-columns: 70px minmax(0, 1fr) auto; }
+  .rk-rrow .rk-perf { display: none; }
+  .rk-rules > div { grid-template-columns: 1fr; gap: 2px; }
+  .hide-sm { display: none; }
+  .rk-table .rk-badge b { display: none; }
+  .rk-pl .av { display: none; }
+  .rk-table td, .rk-table th { padding: 7px 5px; font-size: 12.5px; }
+  .rka-ledger > div { grid-template-columns: 56px minmax(0, 1fr) auto; }
+  .rka-ledger > div > span:nth-child(2) { display: none; }
+}

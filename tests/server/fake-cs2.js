@@ -32,6 +32,10 @@ const S = { map: 'de_mirage', autostart: 1, busyUntil: 0, failNext: false, sleep
   mapCmds: 0, everyRound: false, spawns: [], roundEnds: [], cheatsOnAt: null, cheatsWindows: [],
   players: [{ userid: 2, name: 'DOK', steamid64: '76561198000000001', team: 3 }, { userid: 3, name: 'BOT Abe', steamid64: '0', team: 2, bot: true }] };
 const log = (t) => fs.appendFileSync(logFile, `${Date.now()} ${t}\n`);
+// BERX Guard плагины ДУУРАЙЛАГА (тест): /guard?installed=1 → css_berx_guard_* хариулна, enforcing үед map-ын point_servercommand
+// ажиллахгүй (entity устгагдсан), sv_cheats 0-ээс өөр болбол тэр даруй 0. Бодит CounterStrikeSharp биш.
+S.guard = { installed: process.env.FAKE_GUARD === '1', enforcing: false, killed: 0, reverts: 0 };
+const guardStatus = () => `BERX_GUARD ok v=1.0.0 enforcing=${S.guard.enforcing ? 1 : 0} cheats=${cv.sv_cheats === '1' ? 1 : 0} killed=${S.guard.killed} reverts=${S.guard.reverts} blocked=0`;
 // convar тавих (agent ба map хоёулаа) — sv_cheats 1 байсан хугацааг хэмжинэ
 function setCv(k, v) {
   if (k === 'sv_cheats') {
@@ -39,6 +43,7 @@ function setCv(k, v) {
     if (v !== '1' && cv.sv_cheats === '1' && S.cheatsOnAt) { S.cheatsWindows.push({ at: S.cheatsOnAt, ms: Date.now() - S.cheatsOnAt }); S.cheatsOnAt = null; }
   }
   cv[k] = v;
+  if (k === 'sv_cheats' && v !== '0' && S.guard.installed && S.guard.enforcing) { S.guard.reverts++; setCv('sv_cheats', '0'); }
 }
 // Map-ын point_servercommand: entity spawn-аас ~200ms дараа (logic_auto)
 function fireMapLogic(kind) {
@@ -46,6 +51,7 @@ function fireMapLogic(kind) {
   const map = S.map;
   setTimeout(() => {
     if (S.map !== map) return;
+    if (S.guard.installed && S.guard.enforcing) { S.guard.killed++; log('#GUARD point_servercommand killed'); return; }
     const cmds = [...m.onMapSpawn, ...((kind !== 'round' || S.everyRound) ? [...m.onNewGame, ...m.onNewGameRelay] : [])];
     for (const c of cmds) {
       const [k, ...rest] = c.split(' '); const v = rest.join(' ');
@@ -118,6 +124,12 @@ function run(body) {
   if (w[0] === 'matchzy_remote_log_header_value' && w[1]) { (S.mz ||= {}).value = c.match(/"([^"]+)"/)[1]; return ''; }
   if (w[0] === 'matchzy_autostart_mode') { if (w[1] !== undefined) S.autostart = +w[1]; return ''; }
   if (c === 'css_restart') { S.restarts++; return ''; }
+  if (/^css_berx_guard_(status|on|off)$/.test(c)) {
+    if (!S.guard.installed) return `Unknown command '${c}'!`;
+    if (c === 'css_berx_guard_on') { S.guard.enforcing = true; if (cv.sv_cheats !== '0') setCv('sv_cheats', '0'); }
+    if (c === 'css_berx_guard_off') S.guard.enforcing = false;
+    return guardStatus();
+  }
   if (c === 'mp_restartgame 1') { log('#RESTARTGAME'); restartGame(); return ''; }
   if (c === 'log') return S.logOn ? 'currently logging to: file, console, http' : 'not currently logging';
   if (c === 'log on') { S.logOn = true; return ''; }
@@ -161,6 +173,7 @@ http.createServer(async (req, res) => {
   if (u.pathname === '/emit-raw') { const t = body; for (const x of S.logHttp) await fetch(x, { method: 'POST', body: t }).catch(() => {}); res.writeHead(200); return res.end('{}'); }
   if (u.pathname === '/set-players') { S.players = JSON.parse(body); res.writeHead(200); return res.end('{}'); }
   if (u.pathname === '/fail-next') S.failNext = true;
+  if (u.pathname === '/guard') { S.guard.installed = u.searchParams.get('installed') === '1'; if (!S.guard.installed) S.guard.enforcing = false; }
   if (u.pathname === '/round') playRound(u.searchParams.get('w'));
   if (u.pathname === '/rounds') { for (const x of (u.searchParams.get('seq') || '').split(',')) playRound(x); }
   if (u.pathname === '/no-winlimit') S.noWinlimit = u.searchParams.get('v') !== '0';
@@ -170,5 +183,5 @@ http.createServer(async (req, res) => {
   res.writeHead(200, { 'content-type': 'application/json' });
   res.end(JSON.stringify({ map: S.map, autostart: S.autostart, busy: Date.now() < S.busyUntil, cv, sleepAt: S.sleepAt, restarts: S.restarts, configLog: S.configLog.slice(-200), players: S.players,
     logOn: S.logOn, logHttp: S.logHttp, score: S.score, played: S.played, over: S.over, gameOvers: S.gameOvers,
-    mapCmds: S.mapCmds, spawns: S.spawns.slice(-60), roundEnds: S.roundEnds.slice(-60), cheatsWindows: S.cheatsWindows.slice(-200), cheatsOnAt: S.cheatsOnAt }));
+    mapCmds: S.mapCmds, spawns: S.spawns.slice(-60), roundEnds: S.roundEnds.slice(-60), cheatsWindows: S.cheatsWindows.slice(-200), cheatsOnAt: S.cheatsOnAt, guard: S.guard }));
 }).listen(+ctlPort, '127.0.0.1');

@@ -19,7 +19,7 @@ const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 
-const VERSION = '1.4.0';
+const VERSION = '1.5.0';
 
 /* ---------- тохиргоо ---------- */
 (function loadEnv() {
@@ -117,7 +117,9 @@ class Rcon {
 /* ---------- state ---------- */
 const rcon = new Rcon(CFG.rconHost, CFG.rconPort, CFG.rconPassword);
 const state = { online: false, map: null, mode: 'competitive', phase: 'unknown', score: null, players: [], hostname: null, matchzy: false,
-  settings: {}, appliedTeamsVersion: null, lastSettingsAt: 0, lastPluginCheck: 0 };
+  settings: {}, appliedTeamsVersion: null, lastSettingsAt: 0, lastPluginCheck: 0,
+  // Phase 3: BERX Guard (CounterStrikeSharp плагин) — Ranked AIM-ийн sv_cheats/point_servercommand хамгаалалт. null = шалгаагүй
+  guard: null };
 const eventSecret = crypto.randomBytes(16).toString('hex');
 
 async function ensureRcon() {
@@ -183,7 +185,7 @@ async function readStatus() {
   state.players = rows;
   return true;
 }
-const SETTINGS = ['mp_roundtime', 'mp_maxrounds', 'mp_startmoney', 'mp_freezetime', 'mp_friendlyfire', 'mp_overtime_enable', 'sv_infinite_ammo', 'game_mode', 'game_type'];
+const SETTINGS = ['sv_cheats', 'mp_roundtime', 'mp_maxrounds', 'mp_startmoney', 'mp_freezetime', 'mp_friendlyfire', 'mp_overtime_enable', 'sv_infinite_ammo', 'game_mode', 'game_type'];
 async function readSettings() {
   const out = {};
   for (const c of SETTINGS) { const r = await rcon.exec(c).catch(() => ''); const m = r.match(new RegExp(c + '\\s*=\\s*([\\-\\d.]+|true|false)', 'i')); if (m) out[c] = m[1]; }
@@ -194,6 +196,15 @@ async function readSettings() {
 async function checkPlugins() {
   const r = await rcon.exec('css_plugins list').catch(() => '');
   state.matchzy = /matchzy/i.test(r);
+  await checkBerxGuard();
+}
+// BERX Guard-ийн төлөв: зөвхөн уншина (серверийн тохиргоо өөрчлөхгүй). Хариу: "BERX_GUARD ok v=1.0.0 cheats_locked=1 ..."
+async function checkBerxGuard(cmd = 'css_berx_guard_status') {
+  const r = await rcon.exec(cmd).catch(e => 'ERR ' + e.message);
+  const m = String(r).match(/BERX_GUARD\s+(ok|degraded)\s+v=([\w.-]{1,16})(?:\s+enforcing=([01]))?(?:\s+cheats=([01]))?/);
+  state.guard = m ? { ok: m[1] === 'ok', version: m[2], enforcing: m[3] === '1', cheats: m[4] === '1', checkedAt: Date.now(), error: m[1] === 'ok' ? null : String(r).slice(0, 160) }
+    : { ok: false, version: null, checkedAt: Date.now(), error: /unknown command/i.test(r) ? 'not_installed' : String(r).replace(/\s+/g, ' ').slice(0, 160) };
+  return state.guard;
 }
 
 /* ---------- MatchZy event-үүд (localhost HTTP) ---------- */
@@ -222,7 +233,8 @@ http.createServer((req, res) => {
     else if (ev === 'series_start' || ev === 'match_config_load' || ev === 'knife_round_start') { state.phase = ev === 'knife_round_start' ? 'live' : 'warmup'; state.score = { ct: 0, t: 0 }; }
     else if (ev === 'map_picked' || ev === 'side_picked') { /* ignore */ }
     // Тоглолтын түүх: Competitive-ийн дүн, хил нь MatchZy-ийн өөрийнх (AIM-д MatchZy унтраалттай)
-    if (!arena.aim && matchHistory) matchHistory.onMatchZy(e, { map: state.map });
+    if (!arena.aim && matchHistory) matchHistory.onMatchZy(e, { map: state.map, type: arena.matchType === 'ranked' ? 'ranked' : 'casual', serverMode: state.mode,
+      cheats: state.settings && state.settings.sv_cheats !== undefined ? /^(1|true)$/i.test(String(state.settings.sv_cheats)) : null, guard: state.guard });
     heartbeat().catch(() => {});
   });
 }).listen(CFG.eventsPort, '127.0.0.1', () => log(`✓ MatchZy event сонсож байна: 127.0.0.1:${CFG.eventsPort}`))
@@ -331,7 +343,7 @@ const ARENA_VERIFY_MS = Math.max(5000, +process.env.ARENA_VERIFY_MS || 30000);  
 const ARENA_GUARD_MS = Math.max(100, +process.env.ARENA_GUARD_MS || 300);
 const ARENA_GUARD_CHECK_MS = Math.max(ARENA_GUARD_MS + 200, +process.env.ARENA_GUARD_CHECK_MS || 1500);
 const ARENA_FILE = process.env.BERX_ARENA_STATE || path.join(__dirname, '.berx-arena-state.json');
-let arena = { aim: null, snapshot: null, matchzyAutostart: null, workshop: null, log: null, result: null };
+let arena = { aim: null, snapshot: null, matchzyAutostart: null, workshop: null, log: null, result: null, matchType: 'casual' };
 try { const saved = JSON.parse(fs.readFileSync(ARENA_FILE, 'utf8')); if (saved && typeof saved === 'object') arena = { ...arena, ...saved }; } catch (e) { /* анх удаа */ }
 const saveArena = () => { try { fs.writeFileSync(ARENA_FILE, JSON.stringify(arena, null, 2)); } catch (e) { log('⚠ Arena төлөв хадгалагдсангүй:', e.message); } };
 if (arena.aim) { state.mode = 'aim'; log(`AIM горим үргэлжилж байна: ${arena.aim.map} (${arena.aim.size}v${arena.aim.size}, ${arena.aim.weapon}, first to ${arena.aim.rounds})`); }
@@ -363,7 +375,9 @@ function stopAimLogCommands() {
 function aimCtx() {
   const w = arena.workshop, a = arena.aim; if (!a || !w || w.purpose !== 'aim' || !['configuring', 'ready'].includes(w.phase)) return null;
   const entry = wsEntry(a.map); if (!entry) return null;
-  return { mode: a.size === 2 ? 'aim2v2' : 'aim1v1', map: state.map || entry.mapName, workshop_id: entry.workshopId, aim_weapon: a.weapon, target_rounds: a.rounds };
+  return { mode: a.size === 2 ? 'aim2v2' : 'aim1v1', map: state.map || entry.mapName, workshop_id: entry.workshopId, aim_weapon: a.weapon, target_rounds: a.rounds,
+    ranked: a.ranked === true && a.rounds !== 10,
+    guard: state.guard ? { ok: !!(state.guard.ok && state.guard.enforcing && !state.guard.cheats), version: state.guard.version, checkedAt: state.guard.checkedAt } : null };
 }
 function onCs2Log(body) {
   if (matchHistory) { try { matchHistory.onLog(body, { aim: aimCtx() }); } catch (e) { log('⚠ Тоглолтын түүх (log):', e.message); } }
@@ -458,11 +472,13 @@ function leaveAimCommands() {
   stopGuard();
   const cmds = [...stopAimLogCommands(), ...arenaLib.restoreCommands(arena.snapshot)];
   if (state.matchzy || arena.matchzyAutostart !== null) cmds.push(`matchzy_autostart_mode ${[0, 1, 2].includes(arena.matchzyAutostart) ? arena.matchzyAutostart : 1}`);
+  // Ranked AIM-ийн BERX Guard хамгаалалтыг унтраана (Competitive/Practice-д нөлөөлөхгүй)
+  if (state.guard && state.guard.enforcing) { cmds.push('css_berx_guard_off'); state.guard.enforcing = false; }
   return cmds;
 }
 function clearAim() {
   stopGuard(); guardOff = false;   // arena.aim = null болсны дараа guard өөрөө идэвхгүй
-  arena = { aim: null, snapshot: null, matchzyAutostart: null, workshop: null, log: null, result: null };
+  arena = { aim: null, snapshot: null, matchzyAutostart: null, workshop: null, log: null, result: null, matchType: arena.matchType === 'ranked' ? 'ranked' : 'casual' };
   state.mode = 'competitive'; saveArena();
 }
 // Readback: бодит утгыг серверээс уншиж шалгана. required бүгд таарвал ok. optional таараагүйг жагсаана.
@@ -501,12 +517,31 @@ async function handleOptional(badOpt) {
   if (badOpt.includes('mp_equipment_reset_rounds')) w.push('mp_equipment_reset_rounds-ийг сервер хүлээж аваагүй — амьд үлдсэн тоглогчийн сум round бүр бүрэн дүүрэхгүй байж болно');
   return { warning: w.join(' · ') || null };
 }
+// Ranked AIM: BERX Guard ажиллаж буйг ЯГ ОДОО шалгана. Байхгүй бол татгалзана (Casual AIM хэвийн ажиллана).
+async function requireGuard() {
+  let g = await checkBerxGuard();
+  if (!g.ok) throw new Error('BERX Guard плагин серверт илрээгүй (' + (g.error || 'unknown') + ') — Ranked AIM боломжгүй. Casual-аар эхлүүлнэ үү.');
+  g = await checkBerxGuard('css_berx_guard_on');          // зөвхөн Ranked AIM-ийн үед хамгаалалт асаана
+  if (!g.ok || !g.enforcing || g.cheats) throw new Error('BERX Guard хамгаалалт асаагүй (enforcing=' + (g.enforcing ? 1 : 0) + ', sv_cheats=' + (g.cheats ? 1 : 0) + ') — Ranked AIM боломжгүй');
+}
+// Ranked AIM-аас гарах / Casual болоход хамгаалалтыг унтраана (Practice горимын sv_cheats 1-д саад болохгүй)
+async function releaseGuard() {
+  if (!state.guard || !state.guard.version || !state.guard.enforcing) return;
+  await checkBerxGuard('css_berx_guard_off').catch(() => {});
+}
 const ARENA_HANDLERS = {
+  // Competitive-ийн дараагийн тоглолтын төрөл. going_live-д түгжигдэнэ; явж буй тоглолтын төрөл өөрчлөгдөхгүй.
+  async match_type(a) {
+    arena.matchType = a.value === 'ranked' ? 'ranked' : 'casual'; saveArena();
+    return { output: `Дараагийн Competitive тоглолт: ${arena.matchType === 'ranked' ? 'Чансаатай (Ranked)' : 'Энгийн (Casual)'}` };
+  },
   async aim_start(a) {
     needArena();
     const entry = wsEntry(a.map);
     if (!entry || entry.category !== 'aim') throw new Error(`AIM map "${a.map}" agent-ийн workshop-maps.json-д алга — файлаа шинэчилнэ үү`);
     const s = arenaLib.aimSettings(a, entry);
+    const ranked = a.ranked === true && s.rounds !== 10;           // First to 10 хэзээ ч Ranked биш
+    if (ranked) await requireGuard(); else await releaseGuard();
     guardOff = false;
     if (!arena.aim) {
       // Анх AIM-д орох: одоогийн серверийн тохиргоог хадгална (буцахад сэргээнэ)
@@ -516,7 +551,7 @@ const ARENA_HANDLERS = {
       if (state.matchzy) { await rcon.exec('css_restart'); await rcon.exec('matchzy_autostart_mode 0'); }
     }
     await rcon.exec('game_type 0'); await rcon.exec('game_mode 1');
-    arena.aim = { map: entry.id, ...s, since: Date.now(), winlimit: arena.aim ? arena.aim.winlimit : undefined };
+    arena.aim = { map: entry.id, ...s, since: Date.now(), winlimit: arena.aim ? arena.aim.winlimit : undefined, ranked };
     arena.result = null;
     await startAimLog();
     state.mode = 'aim'; state.phase = 'warmup'; state.score = null;
@@ -537,14 +572,19 @@ const ARENA_HANDLERS = {
     const onMapNow = arenaLib.isOnMap(state.map, entry, wf ? wf.names : []);
     if (!w || !(['ready', 'configuring'].includes(w.phase) || (w.phase === 'error' && onMapNow))) throw new Error('AIM map хараахан бэлэн болоогүй байна');
     if (a && a.size !== undefined) Object.assign(arena.aim, arenaLib.aimSettings(a, entry));
+    // Төрөл: тодорхой ирвэл түүгээр, үгүй бол өмнөхийг хадгална. First to 10 → Casual.
+    if (a && typeof a.ranked === 'boolean') arena.aim.ranked = a.ranked;
+    if (arena.aim.rounds === 10) arena.aim.ranked = false;
+    if (arena.aim.ranked) await requireGuard(); else await releaseGuard();
     guardOff = false;
     w.error = null; w.warning = null; w.verified = false;
     await startAimLog();
     await applyAimConfig();                       // mp_restartgame 1 → оноо 0:0, сонгосон тохиргоогоор
     w.phase = 'configuring'; w.onMapAt = Date.now() - 3000; saveArena();
-    return { output: `Дахин эхэллээ: ${arena.aim.size}v${arena.aim.size}, ${arenaLib.WEAPON_LABELS[arena.aim.weapon]}, first to ${arena.aim.rounds}` };
+    return { output: `Дахин эхэллээ: ${arena.aim.size}v${arena.aim.size}, ${arenaLib.WEAPON_LABELS[arena.aim.weapon]}, first to ${arena.aim.rounds} · ${arena.aim.ranked ? 'Чансаатай' : 'Энгийн'}` };
   },
   async aim_stop(a) {
+    await releaseGuard();
     const cmds = leaveAimCommands();
     for (const x of cmds) await rcon.exec(x);
     const restored = !!arena.aim;
@@ -612,7 +652,7 @@ function arenaStatus() {
   const w = arena.workshop;
   return {
     mode: arena.aim ? 'aim' : 'competitive',
-    aim: arena.aim ? { map: arena.aim.map, size: arena.aim.size, weapon: arena.aim.weapon, rounds: arena.aim.rounds, since: arena.aim.since, winlimit: arena.aim.winlimit !== false } : null,
+    aim: arena.aim ? { map: arena.aim.map, size: arena.aim.size, weapon: arena.aim.weapon, rounds: arena.aim.rounds, since: arena.aim.since, winlimit: arena.aim.winlimit !== false, ranked: arena.aim.ranked === true } : null,
     workshop: w ? { id: w.id, workshopId: w.workshopId, purpose: w.purpose, phase: w.phase, error: w.error || null, warning: w.warning || null, since: w.since, updatedAt: w.updatedAt || w.since, runtimeMap: w.runtimeMap || null } : null,
     result: arena.result || null,
     installed: Object.fromEntries(CATALOG.map(m => { const f = arenaLib.workshopFiles(CFG.cs2Dir, m.workshopId); return [m.id, f ? f.installed : null]; })),
@@ -665,7 +705,8 @@ async function heartbeat() {
     players: state.players, maxPlayers: CFG.maxPlayers, address: CFG.publicAddress || null, hostname: state.hostname,
     matchzy: state.matchzy, appliedTeamsVersion: state.appliedTeamsVersion, settings: state.settings, agentVersion: VERSION, humans: humans.length, mapsAvailable: mapsAvailable(),
     skins: skins && skins.enabled ? skins.status() : undefined,
-    arena: arenaStatus()
+    arena: arenaStatus(),
+    matchType: arena.matchType === 'ranked' ? 'ranked' : 'casual', guard: state.guard
   });
 }
 

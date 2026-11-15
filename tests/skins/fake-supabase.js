@@ -15,6 +15,13 @@ http.createServer(async (req, res) => {
     try { const r = ingestLocal(rows, JSON.parse(b).p); res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(r)); }
     catch (e) { res.writeHead(e.status === 409 ? 409 : 400); return res.end(JSON.stringify({ code: e.status === 409 ? '23505' : '22023', message: e.message })); }
   }
+  // BERX RANKED (006) функцуудын JS mirror — lib/ranking.js (SQL-тэй тэнцүү эсэхийг tests/ranking/sql.mjs шалгана)
+  const RK = { berx_apply_rating: 'applyLocal', berx_adjust_rating: 'adjustLocal', berx_update_ranking_settings: 'settingsLocal', berx_ranking_summary: 'summaryLocal' };
+  if (u.pathname.startsWith('/rest/v1/rpc/') && RK[t] && req.method === 'POST') {
+    if (rpcFail > 0) { rpcFail--; res.writeHead(503); return res.end('{"message":"Service Unavailable"}'); }
+    try { const fn = require('../../lib/ranking.js')[RK[t]]; const r = fn(rows, (JSON.parse(b || '{}') || {}).p || {}); res.writeHead(200, { 'content-type': 'application/json' }); return res.end(JSON.stringify(r)); }
+    catch (e) { res.writeHead(/duplicate key/.test(e.message) ? 409 : 400); return res.end(JSON.stringify({ code: /duplicate key/.test(e.message) ? '23505' : '22023', message: e.message })); }
+  }
   rows[t] ||= [];
   const match = (x) => { for (const [k, v] of u.searchParams) { const m = v.match(/^eq\.(.*)$/); if (m && String(x[k]) !== decodeURIComponent(m[1])) return false; const i = v.match(/^in\.\((.*)\)$/); if (i && !i[1].split(',').map(s => decodeURIComponent(s).replace(/^"|"$/g, '')).includes(String(x[k]))) return false;
     const lt = v.match(/^lt\.(.*)$/); if (lt && !(+x[k] < +decodeURIComponent(lt[1]))) return false; const gte = v.match(/^gte\.(.*)$/); if (gte && !(+x[k] >= +decodeURIComponent(gte[1]))) return false; } return true; };
