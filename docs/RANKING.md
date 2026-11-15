@@ -155,3 +155,13 @@ BERX Ranked нь FACEIT/anti-cheat-ийн орлуулга биш. Wallhack/aimb
 * Agent restart-ын үед AIM тоглолт `interrupted` болдог (Phase 2-ийн зан төлөв) → BRP-гүй.
 * `berx_ratings` нь кэш — ledger-ээс гадуур гараар засвал (жишээ нь SQL Editor-оос) зөрнө; зөвхөн `berx_adjust_rating` ашиглана.
 * Inflation: ялагч ихэвчлэн ялагдагчаас их авна (+190 / −165 дундаж) → нийт BRP аажмаар өснө; Settings → Чансаа-д хянаж, шаардлагатай бол дараагийн томъёоны хувилбарт тохируулна.
+
+## 11. 007 — Database hardening (defense in depth)
+
+`supabase/007_ranking_hardening.sql` нь `berx_apply_rating`-ийг сольж, шинэ `berx_rating_validate(match_id, changes)`-ийг нэмнэ. Хүснэгт, өгөгдөл, томъёо, зэрэглэлийн хил өөрчлөгдөхгүй; backend код өөрчлөгдөхгүй.
+
+DB өөрөө хадгалсан тоглолттой тулгана: BRP хэмжээ (Competitive +150…+230 / −200…−130, AIM яг ±30), roster-ийн яг тоглогчид, `users.steam_id ↔ user_id`, эцсийн багаас тооцсон win/loss, revision (хуучирсан/ирээдүйн → татгалзана), approve зөвхөн хадгалсан proposal-аар (flag-тай/өөрчилсөн → татгалзана), Ranked+completed+CT/T ялагч, First to 10 / Guard, flag + `enabled_at`.
+Автомат дуудлагад шалгалт унавал BRP олгохгүй, шийдвэр `error` (`db_validation: <шалтгаан>`) болж Settings → Чансаа → Алдаа-нд харагдана.
+
+Суулгах: (1) backup — `create table backup_berx_rating_changes_007 as select * from berx_rating_changes;` (2) Supabase SQL Editor → `007_ranking_hardening.sql` → Run. (3) Шалгах: `select proname from pg_proc where proname in ('berx_apply_rating','berx_rating_validate');` → 2 мөр. Deploy, agent, env шаардлагагүй.
+Буцаах: `007_ranking_hardening_rollback.sql` (006-ийн функцийг яг сэргээнэ, өгөгдөл хөндөхгүй).
