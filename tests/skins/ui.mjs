@@ -34,9 +34,15 @@ const dbRow = async (sid) => ((await (await fetch(PG + '/__dump')).json()).skin_
 const pick = (f) => CAT.items.find(f);
 const ak = pick(i => i.w === 'weapon_ak47' && i.st), m4 = pick(i => i.w === 'weapon_m4a1' && i.p > 0), kar = pick(i => i.w === 'weapon_knife_karambit' && i.p > 0);
 const bfly0 = pick(i => i.w === 'weapon_knife_butterfly' && i.p === 0), glv = pick(i => i.k === 'gloves'), agCT = pick(i => i.k === 'agent' && i.t === 3), agT = pick(i => i.k === 'agent' && i.t === 2);
+// CS2-ийн багийн зэвсэг (шаардлагаас): зөвхөн T / зөвхөн CT; бусад нь хоёр багт
+const T_ONLY = ['weapon_ak47', 'weapon_galilar', 'weapon_sg556', 'weapon_mac10', 'weapon_tec9', 'weapon_glock', 'weapon_sawedoff', 'weapon_g3sg1'];
+const CT_ONLY = ['weapon_m4a1', 'weapon_m4a1_silencer', 'weapon_famas', 'weapon_aug', 'weapon_mp9', 'weapon_fiveseven', 'weapon_usp_silencer', 'weapon_hkp2000', 'weapon_mag7', 'weapon_scar20'];
+const GUNS = CAT.weapons.filter(w => !['knives', 'gloves'].includes(w.c));
+const gunsFor = (t) => GUNS.filter(w => !(t === 2 ? CT_ONLY : T_ONLY).includes(w.w));
+const defOf = (w) => String(CAT.weapons.find(x => x.w === w).d);
 const mid = (i, k = .5) => Math.round((i.f[0] + (i.f[1] - i.f[0]) * k) * 1e4) / 1e4;
 const OLD = {
-  '3': { weapons: { [m4.d]: { p: m4.p, wear: mid(m4, .2), seed: 77, st: 0, tag: null } }, knife: { d: kar.d, w: kar.w, p: kar.p, wear: mid(kar), seed: 412, st: 0, tag: null }, gloves: { d: glv.d, p: glv.p, wear: mid(glv), seed: 7 }, agent: agCT.m },
+  '3': { weapons: { [m4.d]: { p: m4.p, wear: mid(m4, .2), seed: 77, st: 0, tag: null }, [ak.d]: { p: ak.p, wear: mid(ak, .4), seed: 5, st: 0, tag: 'LEGACY' } }, knife: { d: kar.d, w: kar.w, p: kar.p, wear: mid(kar), seed: 412, st: 0, tag: null }, gloves: { d: glv.d, p: glv.p, wear: mid(glv), seed: 7 }, agent: agCT.m },
   '2': { weapons: { [ak.d]: { p: ak.p, wear: mid(ak, .3), seed: 661, st: 1, tag: 'OLD' } }, knife: { d: bfly0.d, w: bfly0.w, p: 0, wear: 0.000001, seed: 0, st: 0, tag: null }, gloves: null, agent: agT.m }
 };
 let r = await fetch(B + '/api/action', { method: 'POST', headers: { cookie: K.c, 'content-type': 'application/json' }, body: JSON.stringify({ type: 'skins.save', payload: { loadout: OLD } }) });
@@ -78,13 +84,33 @@ const iconTop = await D.$eval('.skx-cats button.on', b => { const i = b.querySel
 ok(iconTop, 'icon нэрийн дээр, голлосон');
 await D.click('.skx-cats [data-v="all"]'); await D.waitForTimeout(120);
 let all = await cards();
-const guns = CAT.weapons.filter(w => !['knives', 'gloves'].includes(w.c));
-ok(all.length === 3 + guns.length, `All: хутга + бээлий + agent + ${guns.length} зэвсэг (зэвсэг бүр НЭГ card) = ${all.length}`);
+const guns = gunsFor(3);
+ok(all.length === 3 + guns.length, `All (CT): хутга + бээлий + agent + ${guns.length} зэвсэг (зэвсэг бүр НЭГ card) = ${all.length}`);
 ok(new Set(all.filter(c => c.kind === 'weapon').map(c => c.d)).size === guns.length, 'зэвсэг давхардалгүй');
 ok(all.every(c => !c.has), 'шинэ хэрэглэгч: бүх card default');
+const wset = (list) => new Set(list.filter(c => c.kind === 'weapon').map(c => CAT.weapons.find(w => String(w.d) === c.d).w));
+let ws = wset(all);
+ok(T_ONLY.every(w => !ws.has(w)), 'CT All: T-only зэвсэг (AK-47, Galil AR, SG 553, MAC-10, Tec-9, Glock-18, Sawed-Off, G3SG1) огт харагдахгүй');
+ok(CT_ONLY.every(w => ws.has(w)) && gunsFor(2).filter(w => !T_ONLY.includes(w.w)).every(w => ws.has(w.w)), 'CT All: CT-only 10 зэвсэг + хоёр талын бүх зэвсэг харагдана');
+await D.click('.skx-teamsw [data-t="2"]'); await D.waitForTimeout(150);
+ws = wset(await cards());
+ok(CT_ONLY.every(w => !ws.has(w)) && T_ONLY.every(w => ws.has(w)) && ws.size === gunsFor(2).length, `T All: CT-only зэвсэг алга, T-only 8 + хоёр талын = ${ws.size}`);
+const tc = await cards(); ok(['knife', 'gloves', 'agent'].every(k => tc.find(c => c.key === k)), 'T: хутга, бээлий, agent хоёр багт хэвээр');
+await D.click('.skx-teamsw [data-t="3"]'); await D.waitForTimeout(150);
 await cat('pistols'); let pc = await cards();
-ok(JSON.stringify(pc.map(c => c.wn)) === JSON.stringify(['Desert Eagle', 'USP-S', 'Glock-18', 'P250', 'Five-SeveN', 'Dual Berettas', 'Tec-9', 'P2000', 'CZ75-Auto', 'R8 Revolver']), 'Pistols: 10 зэвсэг, заасан дарааллаар');
-for (const [c, n] of [['rifles', 7], ['snipers', 4], ['smgs', 7], ['heavy', 7]]) { await cat(c); const x = await cards(); ok(x.length === n && x.every(k => CAT.weapons.find(w => String(w.d) === k.d).c === c), `${c}: ${n} зэвсэг catalog-ийн ангиллаар`); }
+ok(JSON.stringify(pc.map(c => c.wn)) === JSON.stringify(['Desert Eagle', 'USP-S', 'P250', 'Five-SeveN', 'Dual Berettas', 'P2000', 'CZ75-Auto', 'R8 Revolver']), 'CT Pistols: Glock-18, Tec-9 алга (заасан дарааллаар)');
+for (const t of [3, 2]) {
+  await D.click(`.skx-teamsw [data-t="${t}"]`); await D.waitForTimeout(120);
+  for (const c of ['rifles', 'snipers', 'pistols', 'smgs', 'heavy']) {
+    await cat(c); const x = await cards(), exp = gunsFor(t).filter(w => w.c === c).map(w => String(w.d)).sort();
+    ok(JSON.stringify(x.map(k => k.d).sort()) === JSON.stringify(exp), `${t === 2 ? 'T' : 'CT'} ${c}: ${exp.length} зэвсэг (зөвхөн тухайн багийнх)`);
+  }
+}
+await D.click('.skx-teamsw [data-t="3"]'); await D.waitForTimeout(120);
+// Гараар өөрчилсөн хүсэлт: CT дээр нөгөө багийн зэвсгийн picker нээгдэхгүй
+await D.evaluate(() => { const b = document.createElement('button'); b.dataset.action = 'skx-open'; b.dataset.kind = 'weapon'; b.dataset.d = '7'; b.id = 'forged'; document.querySelector('.skx-grid').appendChild(b); });
+await D.click('#forged'); await D.waitForTimeout(150);
+ok(!(await D.$('.skx-pick')), 'CT дээр AK-47-ийн picker-ийг хүчээр нээх оролдлого → нээгдэхгүй');
 await cat('knives'); ok((await cards()).length === 21, 'Knives: хутганы slot + 20 төрөл');
 await cat('gloves'); ok((await cards()).length === 9, 'Gloves: бээлийн slot + 8 төрөл');
 await cat('agents'); let ag = await cards();
@@ -93,13 +119,14 @@ await cat('rifles');
 const cols = await D.$eval('.skx-grid', e => getComputedStyle(e).gridTemplateColumns.split(' ').length);
 ok(cols >= 5 && cols <= 7, `desktop 1440: нэг мөрөнд ${cols} card (5–7)`);
 const defImgs = await D.$$eval('.skx-card.def img', e => e.map(i => ({ src: i.src, w: i.naturalWidth })));
-ok(defImgs.length === 7 && defImgs.every(i => i.w > 0 && i.src.includes('/assets/weapons/')), 'default зэвсгийн зураг (local WebP) бүгд ачаалагдсан');
+ok(defImgs.length === gunsFor(3).filter(w => w.c === 'rifles').length && defImgs.every(i => i.w > 0 && i.src.includes('/assets/weapons/')), 'default зэвсгийн зураг (local WebP) бүгд ачаалагдсан');
 const sameSize = await D.$$eval('.skx-grid .skx-card', e => new Set(e.map(x => Math.round(x.getBoundingClientRect().width) + 'x' + Math.round(x.getBoundingClientRect().height))).size);
 ok(sameSize === 1, 'card бүр ижил хэмжээтэй');
 if (SHOTS) { await cat('all'); await D.screenshot({ path: SHOTS + '/1-desktop-inventory-empty.png' }); await cat('rifles'); }
 
 /* ---------- 2. Picker: зөвхөн тухайн зэвсгийн skin ---------- */
 console.log('\n== picker');
+await D.click('.skx-teamsw [data-t="2"]'); await D.waitForTimeout(150); await cat('rifles');
 await open('.skx-card[data-d="7"]');
 ok((await D.$eval('.skx-pick-h h2', e => e.textContent)) === 'AK-47', 'AK-47 дарахад picker: AK-47');
 const akSkins = CAT.items.filter(i => i.d === 7);
@@ -126,35 +153,52 @@ await D.$eval('#skx-wear', (e, v) => { e.value = v; e.dispatchEvent(new Event('i
 if (target.st) await D.check('#skx-st');
 await save();
 ok(!(await D.$('.skx-pick')), 'Save амжилттай → picker хаагдсан');
-let row = await dbRow(SID), w7 = row && row.loadout['3'].weapons['7'];
-ok(w7 && w7.p === target.p && w7.seed === 661 && w7.tag === 'BERX' && Math.abs(w7.wear - mid(target, .25)) < 1e-4 && w7.st === (target.st ? 1 : 0), 'skins.save API: CT AK-47 paint/float/seed/StatTrak/name tag яг хадгалагдсан');
-ok(!row.loadout['2'].weapons['7'], 'T loadout хөндөгдөөгүй');
+let row = await dbRow(SID), w7 = row && row.loadout['2'].weapons['7'];
+ok(w7 && w7.p === target.p && w7.seed === 661 && w7.tag === 'BERX' && Math.abs(w7.wear - mid(target, .25)) < 1e-4 && w7.st === (target.st ? 1 : 0), 'skins.save API: T AK-47 paint/float/seed/StatTrak/name tag яг хадгалагдсан');
+ok(!row.loadout['3'].weapons['7'], 'CT loadout хөндөгдөөгүй');
+ok(!(await D.$('#skx-both')), 'AK-47 (T-only): "CT loadout-д мөн хадгалах" сонголт харагдахгүй');
 let akCard = (await cards()).find(c => c.d === '7');
 ok(akCard.has && akCard.name === target.n && akCard.rc.toLowerCase() === target.rc.toLowerCase(), 'card шууд шинэ skin-ээр: нэр + rarity өнгө');
 ok(await D.$eval('.skx-card[data-d="7"] img', i => !i.src.includes('/assets/weapons/')), 'card дээр skin-ий бодит зураг (catalog)');
 
 /* ---------- 3. T / CT ---------- */
 console.log('\n== T / CT');
-await D.click('.skx-teamsw [data-t="2"]'); await D.waitForTimeout(150);
-ok(!(await cards()).find(c => c.d === '7').has, 'T рүү шилжихэд AK-47 default (CT-ийн сонголт харагдахгүй)');
-ok((await cards()).find(c => c.d === '16').wn === 'M4A4' && await D.$eval('.skx-card[data-d="16"] .skx-badge', e => e.textContent === 'CT зэвсэг'), 'T дээр M4A4-д "CT зэвсэг" badge (сонгох боломжтой хэвээр)');
-const tSkin = akSkins.find(i => i.id !== target.id && i.p > 0);
-await open('.skx-card[data-d="7"]'); await D.click(`.skx-skin-b[data-id="${tSkin.id}"]`); await save();
-row = await dbRow(SID);
-ok(row.loadout['2'].weapons['7'].p === tSkin.p && row.loadout['3'].weapons['7'].p === target.p, 'T ба CT тусдаа: T AK ≠ CT AK');
 await D.click('.skx-teamsw [data-t="3"]'); await D.waitForTimeout(150);
-ok((await cards()).find(c => c.d === '7').name === target.n, 'CT рүү буцахад CT-ийн skin');
-// хоёр багт хамт
-const usp = CAT.items.find(i => i.d === 61 && i.p > 0);
-await cat('pistols'); await open('.skx-card[data-d="61"]'); await D.click(`.skx-skin-b[data-id="${usp.id}"]`); await D.check('#skx-both'); await save();
+let rc = await cards();
+ok(!rc.find(c => c.d === '7') && rc.find(c => c.d === '16') && !(await D.$('.skx-badge')), 'CT рүү шилжихэд жагсаалт шууд: AK-47 алга, M4A4 бий (badge биш, шүүлт)');
+ok((await D.$eval('.skx-teamsw [data-t="2"] span', e => e.textContent)) === '1' && (await D.$eval('.skx-teamsw [data-t="3"] span', e => e.textContent)) === '0', 'багийн тоо: T 1 (AK), CT 0');
+await D.click('.skx-teamsw [data-t="2"]'); await D.waitForTimeout(150);
+rc = await cards(); ok(!rc.find(c => c.d === '16') && rc.find(c => c.d === '7').name === target.n, 'T рүү буцахад M4A4 алга, AK-47 T skin-тэйгээ');
+// хоёр талын зэвсэг (Desert Eagle): T ба CT тусдаа skin
+const deSkins = CAT.items.filter(i => i.d === 1 && i.p > 0), deT = deSkins[0], deCT = deSkins[1];
+await cat('pistols'); await open('.skx-card[data-d="1"]'); ok(!!(await D.$('.skx-skin-b')), 'T Pistols: Desert Eagle (хоёр талын) нээгдэнэ');
+await D.click(`.skx-skin-b[data-id="${deT.id}"]`); ok(!!(await D.$('#skx-both')), 'хоёр талын зэвсэгт "CT loadout-д мөн хадгалах" харагдана'); await save();
+await D.click('.skx-teamsw [data-t="3"]'); await D.waitForTimeout(150);
+ok(!(await cards()).find(c => c.d === '1').has, 'CT Desert Eagle default (T-ийн сонголт CT-д нөлөөлөхгүй)');
+await open('.skx-card[data-d="1"]'); await D.click(`.skx-skin-b[data-id="${deCT.id}"]`); await save();
 row = await dbRow(SID);
-ok(row.loadout['2'].weapons['61'] && row.loadout['3'].weapons['61'] && row.loadout['2'].weapons['61'].p === usp.p, '"T loadout-д мөн хадгалах" → хоёр багт');
+ok(row.loadout['2'].weapons['1'].p === deT.p && row.loadout['3'].weapons['1'].p === deCT.p, 'T ба CT тусдаа: T Deagle ≠ CT Deagle');
+// хоёр багт хамт (P250 — хоёр талын)
+const p250 = CAT.items.find(i => i.d === 36 && i.p > 0);
+await open('.skx-card[data-d="36"]'); await D.click(`.skx-skin-b[data-id="${p250.id}"]`); await D.check('#skx-both'); await save();
+row = await dbRow(SID);
+ok(row.loadout['2'].weapons['36'] && row.loadout['3'].weapons['36'] && row.loadout['2'].weapons['36'].p === p250.p, '"T loadout-д мөн хадгалах" → хоёр багт (P250)');
+// CT-only (USP-S): нөгөө багт хадгалах сонголтгүй, зөвхөн CT
+const usp = CAT.items.find(i => i.d === 61 && i.p > 0);
+await open('.skx-card[data-d="61"]'); await D.click(`.skx-skin-b[data-id="${usp.id}"]`);
+ok(!(await D.$('#skx-both')), 'USP-S (CT-only): "T loadout-д мөн хадгалах" харагдахгүй'); await save();
+row = await dbRow(SID); ok(row.loadout['3'].weapons['61'] && !row.loadout['2'].weapons['61'], 'USP-S зөвхөн CT-д хадгалагдсан');
+// picker нээлттэй үед баг солих → аюулгүй хаагдана
+await open('.skx-card[data-d="61"]');
+await D.evaluate(() => { const b = document.createElement('button'); b.dataset.action = 'skx-team'; b.dataset.t = '2'; b.id = 'tsw'; document.body.appendChild(b); b.click(); }); await D.waitForTimeout(150);
+ok(!(await D.$('.skx-pick')) && !(await cards()).find(c => c.d === '61'), 'USP-S picker нээлттэй үед T рүү солиход picker хаагдаж, USP-S жагсаалтаас алга');
+await D.click('.skx-teamsw [data-t="3"]'); await D.waitForTimeout(150);
 
 /* ---------- 4. Reset ---------- */
-await cat('rifles'); await open('.skx-card[data-d="7"]');
+await cat('pistols'); await open('.skx-card[data-d="1"]');
 await D.click('[data-action="skx-reset"]'); await D.waitForTimeout(300);
 row = await dbRow(SID);
-ok(!row.loadout['3'].weapons['7'] && row.loadout['2'].weapons['7'] && !(await cards()).find(c => c.d === '7').has, 'Reset to default: зөвхөн CT AK-47 устсан, T хэвээр');
+ok(!row.loadout['3'].weapons['1'] && row.loadout['2'].weapons['1'] && !(await cards()).find(c => c.d === '1').has, 'Reset to default: зөвхөн CT Desert Eagle устсан, T хэвээр');
 
 /* ---------- 5. Хутга / бээлий / agent ---------- */
 console.log('\n== knife / gloves / agents');
@@ -205,6 +249,8 @@ await D.click('[data-action="skx-favonly"]'); await D.waitForTimeout(100);
 ids = await D.$$eval('.skx-skin-b', e => e.map(x => x.dataset.id));
 ok(ids.length === 1 && ids[0] === awp.id, 'picker: зөвхөн favorite шүүлт');
 await D.click('[data-action="skx-close"]');
+await D.click('.skx-teamsw [data-t="2"]'); await D.waitForTimeout(150); await D.click('.skx-teamsw [data-t="3"]'); await D.waitForTimeout(150);
+row = await dbRow(SID); ok((row.favorites || []).includes(awp.id), 'баг солиход favorite хадгалагдсан хэвээр');
 const sync = (await D.$eval('.skx-sync', e => e.textContent)).trim();
 const LABELS = ['Хадгалж байна...', 'Сонголт хадгалагдсан', 'Серверт илгээж байна...', 'Серверт бэлэн', 'Тоглоомд идэвхтэй', 'Сервер асахад идэвхжинэ'];
 ok(LABELS.includes(sync), 'төлөв энгийн бичгээр: ' + sync);
@@ -223,9 +269,11 @@ const vis = await D.$eval('.skx', e => e.innerText);
 ok(!/\bv\d+\b|синк|sync|database|\bDB\b|\bAPI\b|HTTP|WeaponPaints|loadout хоосон/i.test(vis), 'хэрэглэгчийн UI-д version/sync/DB/API техникийн бичиг алга');
 if (SHOTS) {
   await cat('all'); await D.screenshot({ path: SHOTS + '/2-desktop-inventory.png' });
-  await cat('rifles'); await open('.skx-card[data-d="7"]'); await D.click(`.skx-skin-b[data-id="${target.id}"]`); await D.waitForTimeout(200);
+  await cat('snipers'); await open('.skx-card[data-d="9"]'); await D.click(`.skx-skin-b[data-id="${awp.id}"]`); await D.waitForTimeout(200);
   await D.screenshot({ path: SHOTS + '/3-desktop-picker.png' }); await D.keyboard.press('Escape');
   await cat('all'); await open('.skx-card[data-key="knife"]'); await D.click('[data-action="skx-types"]'); await D.waitForTimeout(150); await D.screenshot({ path: SHOTS + '/4-desktop-knife-types.png' }); await D.keyboard.press('Escape');
+  for (const [t, n] of [[3, 'ct'], [2, 't']]) { await D.click(`.skx-teamsw [data-t="${t}"]`); await cat('rifles'); await D.waitForTimeout(200); await D.screenshot({ path: `${SHOTS}/7-desktop-${n}-rifles.png` }); }
+  await D.click('.skx-teamsw [data-t="3"]'); await cat('all');
 }
 
 /* ---------- 8. Хуучин loadout (өмнөх UI) бүрэн хадгалагдана ---------- */
@@ -234,16 +282,20 @@ const KP = await page(K, { width: 1280, height: 860 }, 'old-user');
 await KP.goto(B + '/#skins'); await KP.waitForSelector('.skx-grid');
 const kc = await KP.$$eval('.skx-grid .skx-card', els => els.map(e => ({ key: e.dataset.key, d: e.dataset.d, has: e.classList.contains('has'), name: e.querySelector('b').textContent })));
 ok(kc.find(c => c.key === 'knife').name === kar.n && kc.find(c => c.key === 'gloves').name === glv.n && kc.find(c => c.key === 'agent').name === agCT.n && kc.find(c => c.d === String(m4.d)).name === m4.n, 'CT: хутга, бээлий, agent, M4A4 хуучин сонголт харагдана');
+ok(!kc.find(c => c.d === String(ak.d)) && (await KP.$eval('.skx-teamsw [data-t="3"] span', e => e.textContent)) === '4', 'хуучин UI-аар CT-д хадгалсан AK-47 CT дээр харагдахгүй (тоонд ч орохгүй: M4A4 + хутга + бээлий + agent = 4)');
 await KP.click('.skx-teamsw [data-t="2"]'); await KP.waitForTimeout(150);
 const kt = await KP.$$eval('.skx-grid .skx-card', els => els.map(e => ({ key: e.dataset.key, d: e.dataset.d, has: e.classList.contains('has'), name: e.querySelector('b').textContent, st: !!e.querySelector('.skx-st') })));
 ok(kt.find(c => c.key === 'knife').name === 'Vanilla' && kt.find(c => c.d === '7').name === ak.n && kt.find(c => c.d === '7').st && !kt.find(c => c.key === 'gloves').has, 'T: Vanilla butterfly, AK StatTrak, бээлийгүй');
 // нэг зэвсэг өөрчлөхөд бусад бүх утга яг хэвээр
-await KP.click('.skx-cats [data-v="smgs"]'); await KP.click('.skx-card[data-d="34"]'); await KP.waitForSelector('.skx-pick');
-const mp9 = CAT.items.find(i => i.d === 34 && i.p > 0);
-await KP.click(`.skx-skin-b[data-id="${mp9.id}"]`); await KP.click('[data-action="skx-save"]'); await KP.waitForTimeout(600);
+await KP.click('.skx-cats [data-v="smgs"]'); await KP.waitForTimeout(120);
+ok(!(await KP.$('.skx-card[data-d="34"]')), 'T SMGs: MP9 (CT-only) алга');
+await KP.click('.skx-card[data-d="17"]'); await KP.waitForSelector('.skx-pick');
+const mac = CAT.items.find(i => i.d === 17 && i.p > 0);
+await KP.click(`.skx-skin-b[data-id="${mac.id}"]`); await KP.click('[data-action="skx-save"]'); await KP.waitForTimeout(600);
 const after = (await dbRow(SID2)).loadout;
-const expect = JSON.parse(JSON.stringify(oldSaved)); expect['2'].weapons['34'] = after['2'].weapons['34'];
-ok(after['2'].weapons['34'] && after['2'].weapons['34'].p === mp9.p && JSON.stringify(after) === JSON.stringify(expect), 'шинэ UI-аар нэг skin нэмэхэд хуучин хутга/бээлий/agent/float/seed/StatTrak/tag бүгд ЯГ хэвээр');
+const expect = JSON.parse(JSON.stringify(oldSaved)); expect['2'].weapons['17'] = after['2'].weapons['17'];
+ok(after['2'].weapons['17'] && after['2'].weapons['17'].p === mac.p && JSON.stringify(after) === JSON.stringify(expect), 'шинэ UI-аар нэг skin нэмэхэд хуучин хутга/бээлий/agent/float/seed/StatTrak/tag бүгд ЯГ хэвээр');
+ok(after['3'].weapons[String(ak.d)] && after['3'].weapons[String(ak.d)].tag === 'LEGACY', 'нуугдсан хуучин CT AK-47 өгөгдөл устаагүй (DB-д хэвээр)');
 
 /* ---------- 9. Mobile ---------- */
 console.log('\n== mobile');
@@ -263,6 +315,7 @@ const sb = await M.$eval('[data-action="skx-save"]', b => { const r = b.getBound
 ok(sb.bottom <= 844 && sb.top >= 0, 'mobile picker: Save товч дэлгэц дотор харагдана');
 ok(await M.evaluate(() => { const p = document.querySelector('.skx-pick').getBoundingClientRect(); return Math.round(p.width) === 390; }), 'mobile picker бүтэн дэлгэц');
 if (SHOTS) await M.screenshot({ path: SHOTS + '/6-mobile-picker.png' });
+if (SHOTS) { await M.keyboard.press('Escape'); for (const [t, n] of [[3, 'ct'], [2, 't']]) { await M.click(`.skx-teamsw [data-t="${t}"]`); await M.click('.skx-cats [data-v="pistols"]'); await M.waitForTimeout(250); await M.screenshot({ path: `${SHOTS}/8-mobile-${n}-pistols.png` }); } }
 const T = await page(A, { width: 820, height: 1180 }, 'tablet');
 await T.goto(B + '/#skins'); await T.waitForSelector('.skx-grid');
 ok(await T.evaluate(() => document.documentElement.scrollWidth <= 820), 'tablet 820: хэвтээ scroll алга');
