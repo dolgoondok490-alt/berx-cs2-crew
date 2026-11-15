@@ -6,6 +6,7 @@
 .mh-type.ranked { color: #ffe9a8; background: linear-gradient(90deg, rgba(246, 184, 21, .18), rgba(255, 106, 0, .14)); border-color: rgba(246, 184, 21, .45); }
 .mh-type.ranked.review, .mh-type.ranked.error, .mh-type.ranked.pending { border-style: dashed; }
 .mh-type.ranked.not_eligible, .mh-type.ranked.rejected { opacity: .7; }
+.mh-type.hist { color: #cfe3ff; background: rgba(90, 150, 255, .14); border-color: rgba(120, 170, 255, .45); letter-spacing: .02em; font-weight: 800; }
 .mh-endc { justify-self: end; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
 .mh-brp { font-size: 12px; font-weight: 800; }
 .rk-type button[disabled] { opacity: .45; cursor: not-allowed; }

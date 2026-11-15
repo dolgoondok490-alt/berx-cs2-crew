@@ -1,8 +1,8 @@
 name: BERX RANKED & BRP
 on:
   push:
-    branches: ['berx-ranking-v1', 'main']
-    paths: ['lib/**', 'agent/**', 'server/**', 'js/**', 'css/**', 'index.html', 'supabase/**', 'tests/**', '.github/workflows/ranking.yml']
+    branches: ['berx-ranking-v1', 'ranking-db-hardening', 'main']
+    paths: ['lib/**', 'agent/**', 'server/**', 'js/**', 'css/**', 'index.html', 'supabase/**', 'scripts/**', 'docs/historical-import/**', 'tests/**', '.github/workflows/ranking.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -28,6 +28,10 @@ jobs:
         run: node tests/ranking/unit.mjs
       - name: Ranking SQL on real PostgreSQL 16 (RLS, ledger immutability, atomic, concurrency, rollback, JS mirror = SQL)
         run: node tests/ranking/sql.mjs
+      - name: Ranking DB hardening (007) on real PostgreSQL 16
+        run: node tests/ranking/hardening.mjs
+      - name: Historical rating import (008) + dry-run tool on real PostgreSQL 16
+        run: node tests/ranking/historical.mjs
       - name: Ranking end-to-end (site + agent 1.5.0 + fake CS2/MatchZy + SIMULATED BERX Guard + fake Supabase)
         run: node tests/ranking/e2e.mjs
       - name: Regression (Match History + Arena)

@@ -62,7 +62,7 @@
         const m = x.match || {};
         return `<button class="rk-rrow" data-action="rk-open" data-id="${esc(x.matchId)}">
           <span class="mh-res ${x.result}">${x.result === 'win' ? 'Хожил' : 'Хожигдол'}</span>
-          <span class="rk-rmain"><b>${MODE[x.mode] || esc(x.mode || '')}</b><span class="dim">${m.map ? esc(String(m.map).replace(/^de_/, '')) + ' · ' : ''}${m.score_ct !== undefined ? m.score_ct + ':' + m.score_t + ' · ' : ''}${U.fmtDate(new Date(x.at))}</span></span>
+          <span class="rk-rmain"><b>${MODE[x.mode] || esc(x.mode || '')}${x.historical ? ' <span class="mh-type hist">Чансаанд нөхөн бүртгэсэн</span>' : ''}</b><span class="dim">${m.map ? esc(String(m.map).replace(/^de_/, '')) + ' · ' : ''}${m.score_ct !== undefined ? m.score_ct + ':' + m.score_t + ' · ' : ''}${U.fmtDate(new Date(x.at))}</span></span>
           ${x.score !== null ? `<span class="rk-perf" title="Хувийн үзүүлэлт (0–100)"><span class="dim">Үзүүлэлт</span><b class="mono">${x.score.toFixed(1)}</b></span>` : '<span class="rk-perf"><span class="dim">AIM</span><b class="mono">±30</b></span>'}
           <span class="rk-delta mono ${x.delta >= 0 ? 'win' : 'loss'}">${R.fmtDelta(x.delta)} BRP</span>
         </button>`;
