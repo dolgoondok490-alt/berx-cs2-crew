@@ -17,6 +17,18 @@
   const get = (p) => fetch('api/berx/' + p, { credentials: 'same-origin', cache: 'no-store' }).then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || 'Алдаа'), { status: r.status }); return j; });
   const rerender = () => window.BerxApp.render();
   const has = (v) => v !== null && v !== undefined;
+  const RK = () => window.BerxRank;
+  // RANKED / CASUAL шошго (+ таны BRP өөрчлөлт)
+  function typeChip(m) {
+    if (m.match_type !== 'ranked') return '<span class="mh-type casual" title="Энгийн тоглолт — BRP-д нөлөөлөхгүй">CASUAL</span>';
+    const rk = m.ranking || {};
+    const t = rk.status === 'rated' ? 'BRP тооцогдсон' : RK().why(rk) || RK().STATUS[rk.status] || '';
+    return `<span class="mh-type ranked ${esc(rk.status || '')}" title="${esc(t)}">RANKED</span>`;
+  }
+  function brpChip(m) {
+    const rk = m.ranking; if (!rk || !rk.me) return '';
+    return `<span class="mh-brp mono ${rk.me.delta >= 0 ? 'win' : 'loss'}">${RK().fmtDelta(rk.me.delta)} BRP</span>`;
+  }
 
   /* ---------- туслах ---------- */
   function mapOf(m) {
@@ -43,10 +55,10 @@
     const mp = mapOf(m);
     return `<button class="mh-row" data-action="mh-open" data-id="${esc(m.id)}" aria-label="${esc(mp.name)} тоглолтын дэлгэрэнгүй">
       <span class="mh-thumb" style="${mp.img ? `--img:url('${esc(mp.img)}')` : ''}"></span>
-      <span class="mh-main"><b>${esc(mp.name)}</b><span class="mh-sub"><span class="mh-mode ${esc(m.mode)}">${MODE[m.mode] || esc(m.mode)}</span>${m.aim_weapon ? `<span class="dim">${WEAPON[m.aim_weapon] || ''} · first to ${m.target_rounds}</span>` : ''}</span></span>
+      <span class="mh-main"><b>${esc(mp.name)}</b><span class="mh-sub">${typeChip(m)}<span class="mh-mode ${esc(m.mode)}">${MODE[m.mode] || esc(m.mode)}</span>${m.aim_weapon ? `<span class="dim">${WEAPON[m.aim_weapon] || ''} · first to ${m.target_rounds}</span>` : ''}</span></span>
       ${score(m)}
       <span class="mh-meta"><span>${when(m.started_at)}</span><span class="dim">${dur(m.duration_s)} · ${m.player_count} тоглогч</span></span>
-      ${resultChip(m)}
+      <span class="mh-endc">${resultChip(m)}${brpChip(m)}</span>
     </button>`;
   }
 
@@ -90,14 +102,15 @@
     const ps = d.players.filter(p => p.team === side);
     const won = d.status === 'completed' && d.winner === side;
     const sc = side === 'CT' ? d.score_ct : d.score_t;
-    const cols = ['K', 'D', 'A', 'K/D', 'HS%', ...(d.has_damage ? ['ADR'] : []), ...(d.has_mvp ? ['MVP'] : [])];
+    const rated = d.ranking && d.ranking.status === 'rated';
+    const cols = ['K', 'D', 'A', 'K/D', 'HS%', ...(d.has_damage ? ['ADR'] : []), ...(d.has_mvp ? ['MVP'] : []), ...(rated && d.mode === 'competitive' ? ['Үзүүлэлт'] : []), ...(rated ? ['BRP'] : [])];
     return `<div class="mh-team ${side === 'CT' ? 'ct' : 't'}">
       <div class="mh-team-h"><b>${side === 'CT' ? 'Counter-Terrorists' : 'Terrorists'}</b><span class="mh-team-s">${sc}</span>${won ? '<span class="mh-res win">Ялсан</span>' : ''}</div>
       ${ps.length ? `<div class="table-wrap"><table class="table mh-table"><thead><tr><th>Тоглогч</th>${cols.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>
       ${ps.map(p => `<tr class="${p.isMe ? 'me' : ''}"><td><div class="mh-pl">${avatarOf(p)}<span><b>${esc(p.member ? p.member.nick : p.name || 'Тоглогч')}</b>${p.isMe ? ' <span class="chip accent">Та</span>' : ''}${!p.connectedAtEnd ? ' <span class="dim" title="Тоглолт дуусахад серверээс гарсан байсан">· гарсан</span>' : ''}</span></div></td>
         <td class="mono">${p.kills}</td><td class="mono">${p.deaths}</td><td class="mono">${p.assists}</td>
         <td class="mono ${kd(p.kills, p.deaths) >= 1 ? 'win' : 'loss'}">${kd(p.kills, p.deaths).toFixed(2)}</td><td class="mono">${has(pct(p.headshotKills, p.kills)) ? pct(p.headshotKills, p.kills) + '%' : '—'}</td>
-        ${d.has_damage ? `<td class="mono">${has(p.damage) && p.roundsPlayed ? Math.round(p.damage / p.roundsPlayed) : '—'}</td>` : ''}${d.has_mvp ? `<td class="mono">${has(p.mvp) ? p.mvp : '—'}</td>` : ''}</tr>`).join('')}
+        ${d.has_damage ? `<td class="mono">${has(p.damage) && p.roundsPlayed ? Math.round(p.damage / p.roundsPlayed) : '—'}</td>` : ''}${d.has_mvp ? `<td class="mono">${has(p.mvp) ? p.mvp : '—'}</td>` : ''}${rated && d.mode === 'competitive' ? `<td class="mono" title="Хувийн үзүүлэлт 0–100 (competitive-v1)">${p.brp && has(p.brp.score) ? p.brp.score.toFixed(1) : '—'}</td>` : ''}${rated ? `<td class="mono ${p.brp ? (p.brp.delta >= 0 ? 'win' : 'loss') : ''}">${p.brp ? RK().fmtDelta(p.brp.delta) : '—'}</td>` : ''}</tr>`).join('')}
       </tbody></table></div>` : '<div class="dim" style="padding:10px 4px">Тоглогч бүртгэгдээгүй</div>'}</div>`;
   }
   function detailHTML(st) {
@@ -108,7 +121,7 @@
     return U.Modal(`
       <div class="mh-hero" style="${mp.img ? `--img:url('${esc(mp.img)}')` : ''}">
         <div class="mh-hero-in">
-          <div class="row wrap" style="gap:8px"><span class="mh-mode ${esc(d.mode)}">${MODE[d.mode]}</span>${d.status !== 'completed' ? `<span class="mh-res st ${d.status}">${STATUS[d.status]}</span>` : ''}</div>
+          <div class="row wrap" style="gap:8px">${typeChip(d)}<span class="mh-mode ${esc(d.mode)}">${MODE[d.mode]}</span>${d.status !== 'completed' ? `<span class="mh-res st ${d.status}">${STATUS[d.status]}</span>` : ''}</div>
           <h2 class="display">${esc(mp.name)}</h2>
           <div class="dim">${when(d.started_at)} · ${dur(d.duration_s)}${d.aim_weapon ? ` · ${WEAPON[d.aim_weapon]} · first to ${d.target_rounds}` : ''} · ${d.rounds_played} round</div>
         </div>
@@ -116,9 +129,19 @@
       </div>
       <div class="modal-body">
         ${d.status !== 'completed' ? `<div class="note warn mb" style="display:block">ℹ️ Энэ тоглолт ${STATUS[d.status].toLowerCase()}: ${esc(REASON[d.status_reason] || 'шалтгаан тодорхойгүй')}. Хожил/хожигдолд тооцогдохгүй.</div>` : ''}
+        ${rankNote(d)}
         <div class="mh-teams">${teamTable(d, 'CT')}${teamTable(d, 'T')}</div>
         ${notes.length ? `<div class="dim mt" style="font-size:11.5px">${notes.join(' ')}</div>` : ''}
       </div>`, { size: 'lg' });
+  }
+  // Чансаатай/Энгийн тоглолтын тайлбар (Монголоор, яагаад BRP өгөөгүй)
+  function rankNote(d) {
+    if (d.match_type !== 'ranked') return '<div class="note mb" style="display:block">🎮 Энгийн тоглолт — энэ тоглолт BRP-д нөлөөлөхгүй.</div>';
+    const rk = d.ranking || { status: 'pending' };
+    if (rk.status === 'rated') return `<div class="note mb rk-note" style="display:block">🏅 Чансаатай тоглолт — BRP өөрчлөлт тооцогдсон${rk.formula ? ` <span class="dim">(${esc(rk.formula)})</span>` : ''}.${rk.me ? ` Таны өөрчлөлт: <b class="${rk.me.delta >= 0 ? 'win' : 'loss'}">${RK().fmtDelta(rk.me.delta)} BRP</b>${has(rk.me.score) ? ` · хувийн үзүүлэлт <b>${rk.me.score.toFixed(1)}</b>` : ''}.` : ''}${rk.flag ? ' <span class="dim">· Дараа нь шинэчлэгдсэн дүн admin шалгалтад.</span>' : ''}</div>`;
+    if (rk.status === 'pending') return '<div class="note mb" style="display:block">⏳ Чансаатай тоглолт — BRP-ийн шийдвэр хүлээгдэж байна.</div>';
+    if (rk.status === 'review') return `<div class="note warn mb" style="display:block">🔎 Чансаатай тоглолт — admin шалгаж байна: ${esc(RK().REASON[rk.reason] || rk.reason)}. Шийдвэр гартал BRP өөрчлөгдөхгүй.</div>`;
+    return `<div class="note warn mb" style="display:block">ℹ️ Чансаатай тоглолт — Энэ тоглолт BRP-д нөлөөлөхгүй: ${esc(RK().why(rk) || RK().STATUS[rk.status] || '')}${/[.!]$/.test(RK().why(rk)) ? '' : '.'}</div>`;
   }
   function openMatch(id) {
     const App = window.BerxApp; const st = { loading: true };

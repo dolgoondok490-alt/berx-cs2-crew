@@ -65,6 +65,7 @@
     help: '<circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3M12 17h.01"/>',
     vote: '<path d="m9 12 2 2 4-4"/><rect x="3" y="3" width="18" height="18" rx="2"/>',
     crown: '<path d="m2 18 2-11 5 5 3-7 3 7 5-5 2 11Z"/>',
+    rank: '<path d="M12 2.5 20 5.6v6.6c0 4.8-3.4 8-8 9.3-4.6-1.3-8-4.5-8-9.3V5.6Z"/><path d="m8.5 13 3.5-3.5 3.5 3.5"/>',
     ext: '<path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
     logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
     edit: '<path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>',
@@ -118,6 +119,7 @@
     { id: 'leaderboard', label: 'Leaderboard', ic: 'trophy' },
     { id: 'awards', label: 'Awards', ic: 'crown' },
     { id: 'server', label: 'SERVER', ic: 'server' },
+    { id: 'ranking', label: 'BERX RANKING', ic: 'rank' },
     { id: 'matches', label: 'Тоглолтын түүх', ic: 'history' },
     { id: 'skins', label: 'SKIN INVENTORY', ic: 'skins', feature: 'skins' }
   ];
@@ -296,6 +298,7 @@
         </div>
       </div>
       <div class="modal-body">
+        ${window.BerxPages && window.BerxPages.ranking && window.BerxRank ? window.BerxPages.ranking.profileBlock(m) : ''}
         <div class="pm-grid">
           ${StatTile('Premier', `<span class="premier">${(s.premier ? s.premier.toLocaleString('en-US') : '—')}</span>`)}
           ${StatTile('FACEIT ELO', s.faceitElo.toLocaleString('en-US') + ` <span style="font-size:14px" class="muted">LVL ${s.level}</span>`)}

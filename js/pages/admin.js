@@ -131,19 +131,21 @@
 
   function render() {
     const u = ui(), me = A.me();
-    if ((u.tab === 'members' || u.tab === 'system') && !me.admin) u.tab = 'profile';   // Server/Гишүүд — зөвхөн admin
+    if ((u.tab === 'members' || u.tab === 'system' || u.tab === 'ranking') && !me.admin) u.tab = 'profile';   // Server/Гишүүд — зөвхөн admin
     return `
       ${U.Hero({ kicker: 'BERX CS2 CREW', title: 'ТОХИРГОО', lead: 'Профайл, гишүүд, бүртгэл, demo тохиргоо.' })}
       <div class="tabs mb" style="display:inline-flex;max-width:100%">
         <button class="${u.tab === 'profile' ? 'on' : ''}" data-action="admin-tab" data-v="profile">${icon('edit')} Миний профайл</button>
         ${me.admin ? `<button class="${u.tab === 'members' ? 'on' : ''}" data-action="admin-tab" data-v="members">${icon('crew')} Гишүүд</button>` : ''}
         ${me.admin ? `<button class="${u.tab === 'system' ? 'on' : ''}" data-action="admin-tab" data-v="system">${icon('gear')} Систем</button>` : ''}
+        ${me.admin && A.isLive() && window.BerxAdminRanking ? `<button class="${u.tab === 'ranking' ? 'on' : ''}" data-action="admin-tab" data-v="ranking">${icon('rank')} Чансаа</button>` : ''}
       </div>
-      ${u.tab === 'profile' ? profileTab(me) : u.tab === 'members' ? membersTab() : A.isLive() ? liveSystemTab() : systemTab()}`;
+      ${u.tab === 'profile' ? profileTab(me) : u.tab === 'members' ? membersTab() : u.tab === 'ranking' && window.BerxAdminRanking ? window.BerxAdminRanking.render() : A.isLive() ? liveSystemTab() : systemTab()}`;
   }
 
   const actions = {
-    'admin-tab'(el) { const u = ui(); u.tab = el.dataset.v; if (u.tab === 'system') u.sys = null; return true; },   // нээх бүрт шинэчилнэ
+    'admin-tab'(el) { const u = ui(); u.tab = el.dataset.v; if (u.tab === 'system') u.sys = null; if (u.tab === 'ranking' && window.BerxAdminRanking) window.BerxAdminRanking.reset(); return true; },
+    ...((window.BerxAdminRanking && window.BerxAdminRanking.actions) || {}),   // нээх бүрт шинэчилнэ
     'pick-avatar'(el) { A.setAvatar({ preset: el.dataset.v }); },
     'remove-avatar'() { A.setAvatar({}); },
     'toggle-admin'(el) { if (el.dataset.id === A.me().id) return window.BerxApp.toast('Өөрийн admin эрхийг хасах боломжгүй', '⚠️'); A.adminToggle(el.dataset.id); },
@@ -153,6 +155,7 @@
   };
 
   function mount(root) {
+    if (ui().tab === 'ranking' && window.BerxAdminRanking) window.BerxAdminRanking.mount(root);
     root.querySelectorAll('[data-pd]').forEach(el => el.addEventListener('input', () => {
       (ui().pdraft ||= {})[el.dataset.pd] = el.value;
       if (el.id === 'p-title') { const c = root.querySelector('#bio-count'); if (c) c.textContent = el.value.length + ' / 160'; }

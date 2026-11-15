@@ -85,7 +85,7 @@ if (process.env.PLAYWRIGHT) {
   const tabs = (p) => p.$$eval('.page[data-page="admin"] .tabs button', e => e.map(b => b.dataset.v));
   for (const [vp, tag] of [[{ width: 1440, height: 900 }, 'desktop'], [{ width: 390, height: 844 }, 'mobile']]) {
     const AP = await page(A, vp, 'admin-' + tag);
-    ok(JSON.stringify(await tabs(AP)) === '["profile","members","system"]', `${tag} admin: Профайл, Гишүүд, Систем (Server) табууд`);
+    ok(JSON.stringify(await tabs(AP)) === '["profile","members","system","ranking"]', `${tag} admin: Профайл, Гишүүд, Систем (Server), Чансаа табууд`);
     await AP.click('[data-action="admin-tab"][data-v="system"]');
     await AP.waitForFunction(() => /Server холболт/.test(document.querySelector('.page').innerText), null, { timeout: 8000 });
     const txt = await AP.$eval('.page', e => e.innerText);

@@ -1,0 +1,44 @@
+name: BERX RANKED & BRP
+on:
+  push:
+    branches: ['berx-ranking-v1', 'main']
+    paths: ['lib/**', 'agent/**', 'server/**', 'js/**', 'css/**', 'index.html', 'supabase/**', 'tests/**', '.github/workflows/ranking.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ranking:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U postgres" --health-interval=5s --health-timeout=5s --health-retries=20
+    env: { PGHOST: 127.0.0.1, PGPORT: 5432, PGUSER: postgres, PGPASSWORD: postgres }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Syntax check
+        run: for f in agent/*.js lib/*.js js/pages/*.js js/app.js js/ui/*.js tests/server/fake-cs2.js tests/skins/fake-supabase.js; do node --check "$f" || exit 1; done
+      - name: Ranking unit (formula, ranges, eligibility, ledger mirror, leaderboard, agent lock, site checks)
+        run: node tests/ranking/unit.mjs
+      - name: Ranking SQL on real PostgreSQL 16 (RLS, ledger immutability, atomic, concurrency, rollback, JS mirror = SQL)
+        run: node tests/ranking/sql.mjs
+      - name: Ranking end-to-end (site + agent 1.5.0 + fake CS2/MatchZy + SIMULATED BERX Guard + fake Supabase)
+        run: node tests/ranking/e2e.mjs
+      - name: Regression (Match History + Arena)
+        run: node tests/matches/recorder-unit.mjs && node tests/matches/sql.mjs && node tests/matches/e2e.mjs && node tests/server/arena-unit.mjs && node tests/server/arena.mjs && node tests/server/admin-settings.mjs
+      - name: Install Playwright (Chromium)
+        run: |
+          npm install --no-save --no-audit --no-fund --prefix /tmp/pw playwright@1.49.1
+          /tmp/pw/node_modules/.bin/playwright install --with-deps chromium
+      - name: Ranking UI + Match History UI (desktop / mobile)
+        env: { PLAYWRIGHT: /tmp/pw/node_modules/playwright, SHOTS: /tmp/shots }
+        run: node tests/ranking/ui.mjs && node tests/matches/ui.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: ranking-screenshots, path: /tmp/shots, retention-days: 7 }

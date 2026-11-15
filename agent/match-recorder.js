@@ -84,6 +84,7 @@ class MatchRecorder {
   }
   /* ---------- нийтлэг ---------- */
   setRoster(players) {   // agent-ийн status_json (5с тутам): одоо серверт байгаа хүмүүс + баг
+    this.bots = (players || []).filter(p => p.bot && ['CT', 'T'].includes(side(p.team))).length;
     this.roster = (players || []).filter(p => !p.bot).map(p => ({ steam: steam64(p.steamId), name: cleanName(p.name), team: side(p.team) })).filter(p => p.steam);
   }
   player(steam, name, team) {
@@ -94,11 +95,18 @@ class MatchRecorder {
     if (team) p.team = team;
     return p;
   }
+  // Ranked/Casual түгжээ (Phase 3): тоглолт эхлэх агшны төрөл, roster (SteamID64, тал), дүрэм, BERX Guard.
+  // Сайт энэ түгжээг эцсийн тоглогчидтой тулгаж шалгана — browser эсвэл дараа нь ирсэн команд өөрчилж чадахгүй.
+  makeLock(mode, rules, guard) {
+    const by = (t) => [...new Set(this.roster.filter(r => r.team === t).map(r => r.steam))];
+    return { v: 1, type: 'ranked', locked_at: this.now(), agent: this.agentVersion, roster: { CT: by('CT'), T: by('T') }, bots: this.bots || 0,
+      rules: { mode, ...rules }, guard: guard && typeof guard === 'object' ? { ok: guard.ok === true, version: guard.version || null, checked_at: guard.checkedAt || null } : null };
+  }
   start(o) {
     this.live = { id: this.newId(), started_at: this.now(), score: { ct: 0, t: 0 }, rounds: 0, players: {}, decided: null, has_damage: false, has_mvp: false,
       lastEventAt: this.now(), health: {}, ...o };
     for (const r of this.roster) if (r.team) this.player(r.steam, r.name, r.team);
-    this.log(`● Тоглолт эхэллээ: ${o.mode} ${o.map} (${this.live.id.slice(0, 8)})`);
+    this.log(`● Тоглолт эхэллээ: ${o.mode} ${o.map} (${this.live.id.slice(0, 8)})${o.lock ? ` · RANKED ${o.lock.roster.CT.length}v${o.lock.roster.T.length}` : ''}`);
     return this.live;
   }
   // Тоглолтыг дуусгах. Round тоглогдоогүй бол бичихгүй (warmup/тохиргооны restart).
@@ -118,6 +126,7 @@ class MatchRecorder {
         team_kills: p.team_kills, suicides: p.suicides, damage: L.has_damage ? p.damage : null, mvp: L.has_mvp ? p.mvp : null,
         rounds_played: Math.min(p.rounds_played, L.rounds), connected_at_end: !!p.connected }));
     const m = { id: L.id, revision: 1, server_id: this.serverId, source: L.source, external_ref: L.ext || null, agent_version: this.agentVersion,
+      match_type: L.lock ? 'ranked' : 'casual', lock: L.lock || null,
       mode: L.mode, map: L.map, workshop_id: L.workshop_id || null, aim_weapon: L.aim_weapon || null, target_rounds: L.target_rounds || null,
       status, status_reason: reason || null, started_at: L.started_at, ended_at: Math.max(L.started_at, this.now()), rounds_played: L.rounds,
       score_ct: L.score.ct, score_t: L.score.t, winner: status === 'completed' ? winner : null, has_damage: L.has_damage, has_mvp: L.has_mvp, players };
@@ -158,7 +167,11 @@ class MatchRecorder {
     const aim = ctx.aim;
     if (ev.type === 'restart') {
       if (this.live) this.end(this.live.decided ? 'completed' : 'aborted', this.live.source === 'cs2log' ? 'restarted' : 'mode_changed');
-      if (aim) this.start({ source: 'cs2log', mode: aim.mode, map: cleanMap(aim.map), workshop_id: aim.workshop_id, aim_weapon: aim.aim_weapon, target_rounds: aim.target_rounds });
+      if (aim) {
+        const map = cleanMap(aim.map);
+        const lock = aim.ranked && aim.target_rounds !== 10 ? this.makeLock(aim.mode, { map, weapon: aim.aim_weapon, target_rounds: aim.target_rounds }, aim.guard) : null;
+        this.start({ source: 'cs2log', mode: aim.mode, map, workshop_id: aim.workshop_id, aim_weapon: aim.aim_weapon, target_rounds: aim.target_rounds, lock });
+      }
       return;
     }
     const L = this.live; if (!L || L.source !== 'cs2log') return;     // live AIM тоглолт байхгүй бол (warmup г.м.) юу ч тоолохгүй
@@ -220,7 +233,8 @@ class MatchRecorder {
     if (ev === 'going_live') {
       if (this.live) this.end(this.live.decided ? 'completed' : 'aborted', this.live.source === 'matchzy' ? 'restarted' : 'mode_changed');
       const map = cleanMap(ctx.map); if (!map) return;
-      this.start({ source: 'matchzy', mode: 'competitive', map, ext: ref });
+      const lock = ctx.type === 'ranked' ? this.makeLock('competitive', { map, server_mode: ctx.serverMode || null, cheats: typeof ctx.cheats === 'boolean' ? ctx.cheats : null }, ctx.guard) : null;
+      this.start({ source: 'matchzy', mode: 'competitive', map, ext: ref, lock });
       return;
     }
     const L = this.live; if (!L || L.source !== 'matchzy') return;

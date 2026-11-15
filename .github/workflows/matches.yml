@@ -1,7 +1,7 @@
 name: BERX MATCH HISTORY
 on:
   push:
-    branches: ['berx-match-history-v1', 'main']
+    branches: ['berx-ranking-v1', 'berx-match-history-v1', 'main']
     paths: ['lib/**', 'agent/**', 'server/**', 'js/**', 'css/**', 'index.html', 'supabase/**', 'tests/matches/**', 'tests/server/fake-cs2.js', 'tests/skins/fake-supabase.js', '.github/workflows/matches.yml']
   workflow_dispatch:
 permissions:
