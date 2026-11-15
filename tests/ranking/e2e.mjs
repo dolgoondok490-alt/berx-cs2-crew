@@ -6,7 +6,8 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else fail++; console.log((c ? 'PASS ' : 'FAIL ') + m); };
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-const freePort = () => new Promise(r => { const s = net.createServer().listen(0, '127.0.0.1', () => { const p = s.address().port; s.close(() => r(p)); }); });
+const usedPorts = new Set();
+const freePort = async () => { for (;;) { const p = await new Promise(r => { const s = net.createServer().listen(0, '127.0.0.1', () => { const x = s.address().port; s.close(() => r(x)); }); }); if (!usedPorts.has(p)) { usedPorts.add(p); return p; } } };   // 2 сервис ижил порт авахаас сэргийлнэ
 const until = async (f, ms, step = 300) => { const end = Date.now() + ms; while (Date.now() < end) { try { const v = await f(); if (v) return v; } catch (e) { /* retry */ } await sleep(step); } return null; };
 const procs = new Set(); const run = (args, env, logf) => { const p = spawn('node', args, { env: { ...process.env, ...env }, stdio: ['ignore', 'pipe', 'pipe'] }); const w = fs.createWriteStream(logf, { flags: 'a' }); p.stdout.pipe(w); p.stderr.pipe(w); procs.add(p); p.on('exit', () => procs.delete(p)); return p; };
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'berx-rk-'));
@@ -70,6 +71,7 @@ fs.writeFileSync(path.join(tmp, 'agent.env'), `BERX_URL=http://127.0.0.1:${siteP
 const agentLog = path.join(tmp, 'agent.log');
 run([path.join(ROOT, 'agent/berx-agent.js')], agentEnv, agentLog);
 let st = await until(async () => { const x = await srv(A); return x.online && x.server.matchzy && x.ranked && x.ranked.guard ? x : null; }, 20000);
+if (!st) console.log('cs2.out:', fs.readFileSync(path.join(tmp, 'cs2.out'), 'utf8').slice(-800), '\nagent.log:', fs.readFileSync(agentLog, 'utf8').slice(-1200));
 ok(st && st.ranked.agentOk && st.ranked.guard.ok && st.ranked.guard.version === '1.0.0', 'agent 1.5.0 online, BERX Guard илэрсэн (status-оор, зөвхөн уншсан)');
 ok(st && !st.ranked.competitive.ok && /идэвхгүй/.test(st.ranked.competitive.why) && st.ranked.matchType === 'casual', 'чансаа унтраалттай → Ranked боломжгүй, анхдагч Casual');
 ok((await ctl()).guard.enforcing === false, 'Guard хамгаалалт анхдагчаар унтраалттай (Practice-д нөлөөгүй)');
