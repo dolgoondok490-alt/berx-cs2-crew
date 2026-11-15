@@ -56,9 +56,11 @@ const P = await reg(prod, 'Kaze', 'k@berx.mn', { steam_id: '76561198000000002', 
 r = await sync(prod, P); u = (await dump()).users.find(x => x.id === P.id);
 ok(r.s === 200 && !r.j.skipped && u.synced_at > Date.now() - 60e3, 'Production (key-тэй): sync хийгдэж хадгалагдсан');
 ok(!u.live.warnings.some(w => /FACEIT_API_KEY тохируулаагүй|LEETIFY_API_KEY тохируулаагүй/.test(w)), 'key-тэй үед "тохируулаагүй" анхааруулга гарахгүй');
-const h = await (await fetch(prod + '/health')).json();
-ok(h.faceit === true && h.leetify === true, 'health: faceit/leetify = true (зөвхөн boolean)');
-const all = JSON.stringify(r.j) + JSON.stringify(h) + JSON.stringify(await dump());
+// API key байгаа эсэх — зөвхөн admin-д (Тохиргоо → Server); нийтийн health-д алга
+const pub = await (await fetch(prod + '/health')).json();
+const h = await (await fetch(prod + '/admin/system', { headers: { cookie: A.c } })).json();
+ok(h.faceit === true && h.leetify === true && !('faceit' in pub) && !('leetify' in pub), 'admin/system: faceit/leetify = true (зөвхөн boolean); нийтийн health-д алга');
+const all = JSON.stringify(r.j) + JSON.stringify(h) + JSON.stringify(pub) + JSON.stringify(await dump());
 ok(!all.includes(FAKE_FACEIT) && !all.includes(FAKE_LEETIFY), 'API key-ийн утга хариу, health, DB-д огт гарахгүй');
 const logs = ['preview', 'local', 'prod'].map(n => fs.readFileSync(path.join(tmp, n + '.log'), 'utf8')).join('');
 ok(!logs.includes(FAKE_FACEIT) && !logs.includes(FAKE_LEETIFY), 'API key server log-д гарахгүй');

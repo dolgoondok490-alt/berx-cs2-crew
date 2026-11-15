@@ -95,8 +95,19 @@
     </div>`;
   }
 
+  // Тохиргоо → Server: мэдээллийг зөвхөн admin-д нээлттэй /api/admin/system-ээс (backend 401/403 шалгана)
+  function loadSystem() {
+    const u = ui(); if (u.sysLoading) return; u.sysLoading = true;
+    fetch('api/admin/system', { credentials: 'same-origin', cache: 'no-store' })
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(j => { u.sys = j; })
+      .catch(st => { u.sys = { failed: true }; if (st === 401 || st === 403) u.tab = 'profile'; })
+      .finally(() => { u.sysLoading = false; if (location.hash === '#admin') window.BerxApp.render(); });
+  }
   function liveSystemTab() {
-    const h = A.backend || {}, n = A.members().length;
+    const h = ui().sys, n = A.members().length;
+    if (!h) { loadSystem(); return '<div class="card empty-state"><div class="e">⏳</div>Ачаалж байна…</div>'; }
+    if (h.failed) return '<div class="card empty-state"><div class="e">⚠️</div>Server мэдээлэл ачаалагдсангүй.</div>';
     const k = (ok, yes, no) => `<span class="chip ${ok ? 'win' : 'loss'}">${ok ? yes : no}</span>`;
     return `<div class="grid cols" style="--c:1fr 1fr">
       <div class="card">
@@ -113,26 +124,26 @@
       <div class="card">
         ${CardHead('crew', 'Бүртгэл')}
         <div class="big-num">${n}</div><div class="muted">бүртгэлтэй гишүүн</div>
-        <div class="note mt">Хүссэн хүн имэйл, утас эсвэл Steam-ээр бүртгүүлнэ. Admin эрхийг зөвхөн Vercel-ийн <code>ADMIN_LOGINS</code> тохиргоо (таны имэйл/утас/SteamID) өгнө. ${h.adminConfigured ? '' : '<b style="color:#ffb15c">⚠️ ADMIN_LOGINS тохируулаагүй байна.</b>'} Зөвхөн найзуудаа оруулах бол <code>ALLOWED_STEAM_IDS</code>.</div>
+        <div class="note mt" style="display:block">Хүссэн хүн имэйл, утас эсвэл Steam-ээр бүртгүүлнэ. Admin эрхийг зөвхөн Vercel-ийн <code>ADMIN_LOGINS</code> тохиргоо (таны имэйл/утас/SteamID) өгнө. ${h.adminConfigured ? '' : '<b style="color:#ffb15c">⚠️ ADMIN_LOGINS тохируулаагүй байна.</b>'} Зөвхөн найзуудаа оруулах бол <code>ALLOWED_STEAM_IDS</code>.</div>
       </div>
     </div>`;
   }
 
   function render() {
     const u = ui(), me = A.me();
-    if (u.tab === 'members' && !me.admin) u.tab = 'profile';
+    if ((u.tab === 'members' || u.tab === 'system') && !me.admin) u.tab = 'profile';   // Server/Гишүүд — зөвхөн admin
     return `
       ${U.Hero({ kicker: 'BERX CS2 CREW', title: 'ТОХИРГОО', lead: 'Профайл, гишүүд, бүртгэл, demo тохиргоо.' })}
       <div class="tabs mb" style="display:inline-flex;max-width:100%">
         <button class="${u.tab === 'profile' ? 'on' : ''}" data-action="admin-tab" data-v="profile">${icon('edit')} Миний профайл</button>
         ${me.admin ? `<button class="${u.tab === 'members' ? 'on' : ''}" data-action="admin-tab" data-v="members">${icon('crew')} Гишүүд</button>` : ''}
-        <button class="${u.tab === 'system' ? 'on' : ''}" data-action="admin-tab" data-v="system">${icon('gear')} Систем</button>
+        ${me.admin ? `<button class="${u.tab === 'system' ? 'on' : ''}" data-action="admin-tab" data-v="system">${icon('gear')} Систем</button>` : ''}
       </div>
       ${u.tab === 'profile' ? profileTab(me) : u.tab === 'members' ? membersTab() : A.isLive() ? liveSystemTab() : systemTab()}`;
   }
 
   const actions = {
-    'admin-tab'(el) { ui().tab = el.dataset.v; return true; },
+    'admin-tab'(el) { const u = ui(); u.tab = el.dataset.v; if (u.tab === 'system') u.sys = null; return true; },   // нээх бүрт шинэчилнэ
     'pick-avatar'(el) { A.setAvatar({ preset: el.dataset.v }); },
     'remove-avatar'() { A.setAvatar({}); },
     'toggle-admin'(el) { if (el.dataset.id === A.me().id) return window.BerxApp.toast('Өөрийн admin эрхийг хасах боломжгүй', '⚠️'); A.adminToggle(el.dataset.id); },

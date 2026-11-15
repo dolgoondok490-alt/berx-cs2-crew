@@ -23,10 +23,12 @@
     'weapon_deagle', 'weapon_usp_silencer', 'weapon_glock', 'weapon_p250', 'weapon_fiveseven', 'weapon_elite', 'weapon_tec9', 'weapon_hkp2000', 'weapon_cz75a', 'weapon_revolver',
     'weapon_mac10', 'weapon_mp9', 'weapon_mp7', 'weapon_mp5sd', 'weapon_ump45', 'weapon_p90', 'weapon_bizon',
     'weapon_nova', 'weapon_xm1014', 'weapon_sawedoff', 'weapon_mag7', 'weapon_m249', 'weapon_negev', 'weapon_taser'];
-  // CS2-ийн зөвхөн нэг талд худалдаалагддаг зэвсэг (мэдээллийн badge — сервер/WeaponPaints хоёр талд нь зөвшөөрнө)
+  // CS2-д зөвхөн нэг багт байдаг зэвсэг — тухайн багийн inventory-д л харагдана (хутга, бээлий хоёр багт)
   const CT_ONLY = new Set(['weapon_m4a1', 'weapon_m4a1_silencer', 'weapon_aug', 'weapon_famas', 'weapon_scar20', 'weapon_usp_silencer', 'weapon_hkp2000', 'weapon_fiveseven', 'weapon_mp9', 'weapon_mag7']);
   const T_ONLY = new Set(['weapon_ak47', 'weapon_galilar', 'weapon_sg556', 'weapon_g3sg1', 'weapon_glock', 'weapon_tec9', 'weapon_mac10', 'weapon_sawedoff']);
   const TEAM_NAME = { 2: 'T', 3: 'CT' };
+  const availOn = (w, team) => !!w && !(team === 2 ? CT_ONLY : T_ONLY).has(w.w);      // зэвсэг тухайн багт байгаа эсэх
+  const sharedGun = (w) => !!w && !CT_ONLY.has(w.w) && !T_ONLY.has(w.w);              // хоёр багт байдаг зэвсэг
   const WEAR = [[0.07, 'Factory New', 'FN'], [0.15, 'Minimal Wear', 'MW'], [0.38, 'Field-Tested', 'FT'], [0.45, 'Well-Worn', 'WW'], [1.01, 'Battle-Scarred', 'BS']];
   const wearOf = (w) => WEAR.find(([max]) => w < max) || WEAR[4];
   const DEMO_KEY = 'berx_skins_demo_v1';
@@ -103,8 +105,9 @@
     if (kind === 'agent') return t.agent ? { data: { m: t.agent }, item: byId.get('a-' + t.agent) || null } : null;
     return null;
   }
-  const countTeam = (team) => { const t = teamOf(S.saved, team); return Object.keys(t.weapons).length + (t.knife ? 1 : 0) + (t.gloves ? 1 : 0) + (t.agent ? 1 : 0); };
-  const gunsOf = (c) => catalog.weapons.filter(w => w.c === c).sort((a, b) => ORDER.indexOf(a.w) - ORDER.indexOf(b.w));
+  // Тоо: тухайн багт харагдах зэвсгийг л тоолно (нөгөө багийн зэвсгийн хуучин сонголт өгөгдөлд хэвээр үлдэнэ, устгахгүй)
+  const countTeam = (team) => { const t = teamOf(S.saved, team); return Object.keys(t.weapons).filter(d => availOn(weaponByDef.get(+d), team)).length + (t.knife ? 1 : 0) + (t.gloves ? 1 : 0) + (t.agent ? 1 : 0); };
+  const gunsOf = (c, team = S.team) => catalog.weapons.filter(w => w.c === c && availOn(w, team)).sort((a, b) => ORDER.indexOf(a.w) - ORDER.indexOf(b.w));
 
   /* ---------- төлөв: хэрэглэгчид ойлгомжтой бичиг (логик нь хэвээр: сайтад хадгалсан → серверт синк → тоглоомд) ----------
    *  Version, sync, database, API зэрэг техникийн мэдээллийг харуулахгүй. Серверт бодитоор синк хийгдээгүй бол "Серверт бэлэн" гэхгүй. */
@@ -133,8 +136,7 @@
   }
   function gunCard(w) {
     const s = savedOf('weapon', w.d, S.team);
-    const other = S.team === 2 ? CT_ONLY.has(w.w) && 'CT зэвсэг' : T_ONLY.has(w.w) && 'T зэвсэг';
-    return cardHTML({ key: 'w-' + w.d, kind: 'weapon', d: w.d, label: w.wn, item: s && s.item, data: s && s.data, defImg: DEF(w.w), badge: other || '' });
+    return cardHTML({ key: 'w-' + w.d, kind: 'weapon', d: w.d, label: w.wn, item: s && s.item, data: s && s.data, defImg: DEF(w.w) });
   }
   function slotCard(kind) {
     const s = savedOf(kind, null, S.team);
@@ -183,17 +185,19 @@
       if (d === undefined || d === null) { p.d = s ? s.data.d : null; p.step = s ? 'skin' : 'type'; }
       else p.d = Number(d);
     }
-    if (kind === 'weapon') p.d = Number(d);
+    if (kind === 'weapon') { p.d = Number(d); if (!availOn(weaponByDef.get(p.d), S.team)) return; }   // нөгөө багийн зэвсэг — нээхгүй
     if (kind === 'agent') {
       const cur = teamOf(S.saved, S.team).agent;
       p.sel = d ? 'a-' + d : cur ? 'a-' + cur : null;
     } else if (s && s.item && (kind === 'weapon' || s.data.d === p.d)) {
       p.sel = s.item.id; p.edit = { wear: s.data.wear ?? defaultsFor(s.item).wear, seed: s.data.seed ?? 0, st: s.data.st ? 1 : 0, tag: s.data.tag || '' };
       const o = savedOf(kind, kind === 'weapon' ? d : null, S.team === 2 ? 3 : 2);
-      p.both = !!(o && o.item && o.item.id === s.item.id);
+      p.both = bothOk(p) && !!(o && o.item && o.item.id === s.item.id);
     }
     S.pick = p;
   }
+  // "Нөгөө багт мөн хадгалах" — зөвхөн хоёр багт байдаг зэвсэг, хутга, бээлийд
+  const bothOk = (p) => p.kind === 'knife' || p.kind === 'gloves' || (p.kind === 'weapon' && sharedGun(weaponByDef.get(p.d)));
   function pickTitle(p) {
     if (p.kind === 'weapon') return weaponByDef.get(p.d).wn;
     if (p.kind === 'agent') return `Agent · ${TEAM_NAME[S.team]}`;
@@ -224,7 +228,7 @@
     }).join('')}</div>`;
   }
   function skinList(p) {
-    const list = pickList(p), here = savedItemId(p, S.team), there = p.kind === 'agent' ? null : savedItemId(p, S.team === 2 ? 3 : 2);
+    const list = pickList(p), here = savedItemId(p, S.team), there = p.kind === 'agent' || !bothOk(p) ? null : savedItemId(p, S.team === 2 ? 3 : 2);
     const all = p.kind === 'agent' ? agentsByTeam[S.team] : (itemsByDef.get(p.d) || []);
     const rar = catalog.meta.rarityOrder.filter(r => all.some(i => i.r === r));
     return `<div class="skx-tools">
@@ -247,7 +251,7 @@
     if (!p.sel) return false;
     const it = byId.get(p.sel);
     if (p.kind === 'agent') return savedItemId(p, it.t) !== it.id;
-    const teams = p.both ? [2, 3] : [S.team];
+    const teams = p.both && bothOk(p) ? [2, 3] : [S.team];
     return teams.some(t => {
       const s = savedOf(p.kind, p.kind === 'weapon' ? p.d : null, t);
       if (!s || !s.item || s.item.id !== it.id) return true;
@@ -280,7 +284,7 @@
         </div>
         ${it.st ? `<label class="sk-check"><input type="checkbox" id="skx-st" ${e.st ? 'checked' : ''}> StatTrak™ (kill тоолуурыг сервер тоолно)</label>` : ''}
       </div>` : ''}
-      ${p.kind !== 'agent' && it ? `<label class="sk-check skx-both"><input type="checkbox" id="skx-both" ${p.both ? 'checked' : ''}> ${other} loadout-д мөн хадгалах</label>` : ''}
+      ${p.kind !== 'agent' && it && bothOk(p) ? `<label class="sk-check skx-both"><input type="checkbox" id="skx-both" ${p.both ? 'checked' : ''}> ${other} loadout-д мөн хадгалах</label>` : ''}
       ${p.kind === 'agent' && it ? `<div class="note" style="font-size:12px;margin-top:8px">Agent зөвхөн ${TEAM_NAME[it.t]} багт хэрэглэгдэнэ.</div>` : ''}
       ${p.err ? `<div class="skx-err" role="alert">⚠️ ${esc(p.err)}</div>` : ''}
       <div class="skx-actions">
@@ -367,7 +371,8 @@
   const toast = (t, i) => window.BerxApp.toast(t, i);
   const actions = {
     'skx-cat'(el) { S.cat = el.dataset.v; return true; },
-    'skx-team'(el) { S.team = +el.dataset.t; if (S.pick) S.pick = null; return true; },
+    // Баг солиход жагсаалт шууд шинэчлэгдэнэ; нээлттэй picker-ийг аюулгүй хаана (сонгосон зэвсэг шинэ багт байхгүй байж болно)
+    'skx-team'(el) { const t = +el.dataset.t; if (t !== 2 && t !== 3 || S.saving) return; S.team = t; if (S.pick) S.pick = null; return true; },
     'skx-retry'() { S.err = null; init(); return true; },
     'skx-open'(el) { const k = el.dataset.kind; openPick(k, k === 'agent' ? el.dataset.d : el.dataset.d !== undefined ? +el.dataset.d : undefined); return true; },
     'skx-ov'(el, e) { if (e && e.target === el && !S.saving) { S.pick = null; return true; } },
@@ -401,9 +406,10 @@
       const it = byId.get(p.sel), next = clone(S.saved || empty());
       for (const t of [2, 3]) next[t] = teamOf(next, t);
       if (p.kind === 'agent') { next[it.t].agent = it.m; return commit(next, `${it.n} → ${TEAM_NAME[it.t]} agent хадгалагдлаа`, keyFor(p)); }
+      if (p.kind === 'weapon' && !availOn(weaponByDef.get(it.d), S.team)) { S.pick = null; return true; }   // энэ багт байхгүй зэвсэг
       const e = { ...p.edit, seed: Math.round(Number(p.edit.seed)) };
       if (it.p !== 0) { const bad = validEdit(it, e); if (bad) { p.err = bad; return true; } }
-      const teams = p.both ? [2, 3] : [S.team];
+      const teams = p.both && bothOk(p) ? [2, 3] : [S.team];
       for (const t of teams) {
         const v = { wear: Math.round(Number(e.wear) * 1e6) / 1e6, seed: e.seed };
         if (p.kind === 'weapon') next[t].weapons[it.d] = { p: it.p, ...v, st: e.st && it.st ? 1 : 0, tag: e.tag || null };
@@ -415,7 +421,7 @@
     'skx-reset'() {
       const p = S.pick; if (!p || S.saving) return;
       const next = clone(S.saved || empty()); for (const t of [2, 3]) next[t] = teamOf(next, t);
-      const teams = p.both && p.kind !== 'agent' ? [2, 3] : [S.team];
+      const teams = p.both && p.kind !== 'agent' && bothOk(p) ? [2, 3] : [S.team];
       for (const t of teams) {
         if (p.kind === 'weapon') delete next[t].weapons[p.d];
         else next[t][p.kind] = null;
