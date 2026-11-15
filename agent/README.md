@@ -153,3 +153,9 @@ CS2_DIR=C:\cs2-server
 * Заавал биш тохиргоо: `MATCH_HISTORY=0` (бүрэн унтраах), `MATCH_DAMAGE_LOG=0` (AIM-д `mp_logdetail` хөндөхгүй, ADR-гүй),
   `SERVER_ID=main`.
 * Суулгах, нөөцлөх, буцаах: `docs/match-history-install.md`.
+
+## BERX Ranked & BRP (agent v1.5.0)
+* Ranked/Casual-ийн төрөл, roster (SteamID64), дүрэм, BERX Guard-ийн төлөв тоглолт эхлэхэд (MatchZy `going_live` / CS2 `Match_Start`) түгжигдэж, тоглолтын дүнтэй хамт сайт руу явна. BRP-ийг зөвхөн сайт тооцоолно.
+* Анхдагч: Casual. Хуучин (1.4.0) agent-ийн бүх тоглолт Casual.
+* Ranked AIM нь BERX Guard (`plugins/BerxGuard`) ажиллаж байхад л эхэлнэ; agent өөрөө `css_berx_guard_status/on/off`-оор шалгана. Casual AIM Guard-гүй хэвийн.
+* Шинэчлэх, буцаах, Guard суулгах, flag идэвхжүүлэх: `docs/RANKING.md`.
