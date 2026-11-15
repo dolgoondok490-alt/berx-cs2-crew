@@ -62,8 +62,16 @@ await comp(9, [0, 1, 2, 3, 4], [5, 6, 7, 8, 30]);   // S(31) бүртгэлгү�
 await comp(10, T1, T2, true, { ended_at: base + 30 * 3600e3 + 400e3 }); // хэт богино → review
 // Admin засвараар бусад зэрэглэлийг харуулах (бүгд audit-тай)
 for (const [i, d] of [[10, 1000], [10, 1000], [10, 1000], [10, 1000], [10, 600], [11, 1000], [11, 1000], [11, 1000], [11, 1000], [11, 400], [2, 1000], [2, 1000], [0, 500]]) await act(A, 'ranking.adjust', { userId: U[i].id, delta: d, reason: 'UI test seed (simulated)' });
+// SIMULATED түүхэн нөхөн бүртгэл (008-ийн бичдэг хэлбэрээр): Casual Competitive тоглолт + origin=historical_import шийдвэр + ledger
+const hist = await post({ id: uuid(), server_id: 'main', source: 'matchzy', external_ref: 'matchzy:hist:0', agent_version: '1.4.0', mode: 'competitive', map: 'de_anubis', status: 'completed',
+  started_at: base - 2 * 86400e3, ended_at: base - 2 * 86400e3 + 2000e3, rounds_played: 17, score_ct: 4, score_t: 13, winner: 'T', has_damage: true, has_mvp: true,
+  players: [...T1.map((i, j) => pst(i, 'CT', 8 + j, 13, 2, 3, 1000 + j * 50, 17)), ...T2.map((i, j) => pst(i, 'T', 14 - j, 8, 3, 5, 1700 - j * 60, 17))] });
+await fetch(PG + '/__insert?t=berx_ranked_matches', { method: 'POST', body: JSON.stringify({ match_id: hist.id, mode: 'competitive', status: 'rated', reason: 'historical_import', formula: 'competitive-v1', revision: 1, flag: null, origin: 'historical_import', decided_by: A.id, decided_at: base, updated_at: base }) });
+for (const [k, i] of [...T1, ...T2].entries()) await fetch(PG + '/__insert?t=berx_rating_changes', { method: 'POST', body: JSON.stringify({ id: (k + 1) / 100, kind: 'match', match_id: hist.id, user_id: U[i].id, steam_id: S(i + 1), mode: 'competitive',
+  result: k < 5 ? 'loss' : 'win', score: 50, delta_calc: k < 5 ? -165 : 190, delta: k < 5 ? -165 : 190, prev_brp: 1000, new_brp: k < 5 ? 835 : 1190, formula: 'competitive-v1',
+  detail: { historical_import: true, batch_id: 'hist-test', weights_used: { kd: 30, adr: 30, contribution: 25, assists: 10, hs: 5 } }, reason: 'Чансаанд нөхөн бүртгэсэн · x', created_at: base - 1 }) });
 const dump = await (await fetch(PG + '/__dump')).json();
-const dec = Object.fromEntries((dump.berx_ranked_matches || []).map(x => [x.match_id, x.status]));
+const dec = Object.fromEntries((dump.berx_ranked_matches || []).filter(x => x.origin !== 'historical_import').map(x => [x.match_id, x.status]));
 ok(Object.values(dec).filter(s => s === 'rated').length === 11 && Object.values(dec).includes('review') && Object.values(dec).includes('not_eligible'), `seed: ${dump.berx_matches.length} тоглолт (simulated) → ${Object.values(dec).filter(s => s === 'rated').length} rated, 1 review, 1 not_eligible, 1 casual`);
 // Simulated heartbeat (agent 1.5.0, Guard илрээгүй) — server хуудсын Ranked сонголтын төлөвт
 await fetch(B + '/server/agent/heartbeat', { method: 'POST', headers: { authorization: 'Bearer ' + SECRET, 'content-type': 'application/json' }, body: JSON.stringify({ online: true, map: 'de_mirage', phase: 'warmup', players: [], matchzy: true, agentVersion: '1.5.0', matchType: 'ranked',
@@ -131,6 +139,18 @@ ok(await D.$eval('.modal', e => /Энгийн тоглолт — энэ тогл
 await D.click('.modal .x'); await D.waitForTimeout(150);
 
 /* ---------- Профайл ---------- */
+console.log('\n== historical import label');
+await D.goto(ORIGIN + '/#matches'); await D.waitForSelector('.mh-row');
+await D.evaluate(id => window.BerxPages.matches.openMatch(id), hist.id); await D.waitForSelector('.mh-table');
+ok(await D.$eval('.modal', e => /CASUAL/.test(e.textContent) && /Чансаанд нөхөн бүртгэсэн/.test(e.textContent) && /анх Энгийн \(Casual\)/.test(e.textContent) && /−165 BRP/.test(e.textContent)), 'түүхэн нөхөн бүртгэл: CASUAL + "Чансаанд нөхөн бүртгэсэн", BRP өөрчлөлт');
+ok((await D.$$eval('.mh-team .mh-table th', e => e.map(x => x.textContent))).includes('BRP'), 'түүхэн нөхөн бүртгэлд BRP багана');
+if (SHOTS) await D.screenshot({ path: SHOTS + '/r13-desktop-historical-import.png' });
+await D.click('.modal .x'); await D.waitForTimeout(150);
+const histRow = await D.$$eval('.mh-row', (e, id) => (e.find(r => r.dataset.id === id) || { textContent: '' }).textContent, hist.id);
+ok(/Чансаанд нөхөн бүртгэсэн/.test(histRow) && /−165 BRP/.test(histRow), 'жагсаалтын мөрөнд шошго + BRP');
+const casRow = await D.$$eval('.mh-row', (e, id) => (e.find(r => r.dataset.id === id) || { textContent: '' }).textContent, dump.berx_matches.find(m => m.match_type === 'casual' && m.mode === 'aim1v1').id);
+ok(/CASUAL/.test(casRow) && !/нөхөн/.test(casRow) && !/BRP/.test(casRow), 'нөхөн бүртгээгүй Casual → 0 BRP, шошгогүй');
+
 console.log('\n== profile');
 await D.goto(ORIGIN + '/#ranking'); await D.waitForSelector('.rk-table');
 await D.click(`.rk-table [data-action="open-profile"][data-id="${K.id}"]`);

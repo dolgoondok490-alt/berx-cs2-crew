@@ -20,7 +20,9 @@
   const RK = () => window.BerxRank;
   // RANKED / CASUAL шошго (+ таны BRP өөрчлөлт)
   function typeChip(m) {
-    if (m.match_type !== 'ranked') return '<span class="mh-type casual" title="Энгийн тоглолт — BRP-д нөлөөлөхгүй">CASUAL</span>';
+    if (m.match_type !== 'ranked') return m.ranking && m.ranking.historical
+      ? '<span class="mh-type casual" title="Анх энгийн тоглолтоор тоглогдсон">CASUAL</span><span class="mh-type hist" title="Admin баталсан түүхэн BRP нөхөн бүртгэл">Чансаанд нөхөн бүртгэсэн</span>'
+      : '<span class="mh-type casual" title="Энгийн тоглолт — BRP-д нөлөөлөхгүй">CASUAL</span>';
     const rk = m.ranking || {};
     const t = rk.status === 'rated' ? 'BRP тооцогдсон' : RK().why(rk) || RK().STATUS[rk.status] || '';
     return `<span class="mh-type ranked ${esc(rk.status || '')}" title="${esc(t)}">RANKED</span>`;
@@ -136,6 +138,10 @@
   }
   // Чансаатай/Энгийн тоглолтын тайлбар (Монголоор, яагаад BRP өгөөгүй)
   function rankNote(d) {
+    if (d.match_type !== 'ranked' && d.ranking && d.ranking.historical) {
+      const rk = d.ranking;
+      return `<div class="note mb rk-note" style="display:block">🗂️ Чансаанд нөхөн бүртгэсэн — энэ тоглолт анх Энгийн (Casual) байдлаар тоглогдсон бөгөөд admin баталсан нэг удаагийн түүхэн бүртгэлээр BRP тооцогдсон${rk.formula ? ` <span class="dim">(${esc(rk.formula)})</span>` : ''}.${rk.me ? ` Таны өөрчлөлт: <b class="${rk.me.delta >= 0 ? 'win' : 'loss'}">${RK().fmtDelta(rk.me.delta)} BRP</b>${has(rk.me.score) ? ` · хувийн үзүүлэлт <b>${rk.me.score.toFixed(1)}</b>` : ''}.` : ''}${rk.flag === 'historical_reversed' ? ' <b>Энэ нөхөн бүртгэлийг дараа нь аудиттай засвараар буцаасан.</b>' : ''}</div>`;
+    }
     if (d.match_type !== 'ranked') return '<div class="note mb" style="display:block">🎮 Энгийн тоглолт — энэ тоглолт BRP-д нөлөөлөхгүй.</div>';
     const rk = d.ranking || { status: 'pending' };
     if (rk.status === 'rated') return `<div class="note mb rk-note" style="display:block">🏅 Чансаатай тоглолт — BRP өөрчлөлт тооцогдсон${rk.formula ? ` <span class="dim">(${esc(rk.formula)})</span>` : ''}.${rk.me ? ` Таны өөрчлөлт: <b class="${rk.me.delta >= 0 ? 'win' : 'loss'}">${RK().fmtDelta(rk.me.delta)} BRP</b>${has(rk.me.score) ? ` · хувийн үзүүлэлт <b>${rk.me.score.toFixed(1)}</b>` : ''}.` : ''}${rk.flag ? ' <span class="dim">· Дараа нь шинэчлэгдсэн дүн admin шалгалтад.</span>' : ''}</div>`;

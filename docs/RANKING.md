@@ -165,3 +165,6 @@ DB өөрөө хадгалсан тоглолттой тулгана: BRP хэм
 
 Суулгах: (1) backup — `create table backup_berx_rating_changes_007 as select * from berx_rating_changes;` (2) Supabase SQL Editor → `007_ranking_hardening.sql` → Run. (3) Шалгах: `select proname from pg_proc where proname in ('berx_apply_rating','berx_rating_validate');` → 2 мөр. Deploy, agent, env шаардлагагүй.
 Буцаах: `007_ranking_hardening_rollback.sql` (006-ийн функцийг яг сэргээнэ, өгөгдөл хөндөхгүй).
+
+## 12. 008 — Түүхэн BRP нөхөн бүртгэл (нэг удаа)
+`supabase/008_historical_rating_import.sql` — admin баталсан manifest-ээр 2026-11-15-ний 4 Competitive тоглолтыг BRP-д нөхөн бүртгэх механизм (migration өөрөө BRP өөрчлөхгүй). Дараалал, dry run, буцаалт: `docs/historical-import/README.md`.

@@ -126,6 +126,12 @@ try {
   const tm = comp(); tm.players = tm.players.map(x => x.steam_id === S(6) ? { ...x, team: 'CT' } : x); ingest(tm);
   rejected(tm, { ...payload(tm), status: 'rated', reason: 'ok', changes: cp.changes.map(c => ({ ...c })) }, 'team_mismatch', 'тоглогч баг сольсон');
 
+  // Түгжээнд байгаагүй оролцогч (11 дэх хүн бодитоор тоглосон)
+  const ux = comp(); ux.players.push(pl(S(13), 'T', 4, 9, 12, 500)); ingest(ux);
+  rejected(ux, { action: 'auto', match_id: ux.id, revision: 1, status: 'rated', reason: 'ok', changes: cp.changes }, 'unexpected_player', 'түгжээнд байгаагүй тоглогч оролцсон');
+  // Горим зөрүү
+  ok(/mode mismatch/.test(rpcFails({ ...payload(ingest(comp())), mode: 'aim1v1' }) || ''), 'горим зөрүүтэй (competitive тоглолтыг aim1v1 гэж) → татгалзсан');
+
   /* ---------- 5. Тоглолтын төлөв ---------- */
   console.log('\n== match states');
   const forced = (mm, label, why) => { ingest(mm); const base = mm.mode === 'competitive' ? cp : apl; rejected(mm, { action: 'auto', match_id: mm.id, revision: 1, status: 'rated', reason: 'ok', formula: 'x', changes: base.changes }, why, label); };
@@ -202,6 +208,11 @@ try {
   const outs = res.map(x => { try { return JSON.parse(x.out.split('\n').pop()); } catch (e) { return {}; } });
   ok(outs.filter(o => o.status === 'rated' && !o.existing).length === 1 && outs.filter(o => o.existing).length === 7 && ledger(dm) === 10, '8 зэрэг дуудлага → 1 удаа олгосон');
   ok(rpc('berx_apply_rating', dp).existing && ledger(dm) === 10, 'дахин дуудлага → давхар олголтгүй');
+  // Нэг тоглогчид 5 өөр тоглолт зэрэг → бүх өөрчлөлт хадгалагдана (lost update-гүй)
+  const cms = Array.from({ length: 5 }, () => ingest(aim()));
+  const b11 = +(psql(`select brp from berx_ratings where user_id='u11'`) || 1000);
+  await Promise.all(cms.map(x => asyncPsql(`set role service_role; select berx_apply_rating(${J(payload(x))})::text`)));
+  ok(+psql(`select brp from berx_ratings where user_id='u11'`) === b11 + 150 && psql(`with x as (select user_id, sum(delta) s from berx_rating_changes group by user_id) select bool_and(r.brp = 1000 + x.s) from berx_ratings r join x using (user_id) where user_id = 'u11'`) === 't', 'зэрэг 5 тоглолт нэг тоглогчид → +150, ledger = баланс');
   ok(/unique|duplicate key/.test(fails(`set role service_role; insert into berx_rating_changes (kind, match_id, user_id, steam_id, result, delta_calc, delta, prev_brp, new_brp, reason, created_at) values ('match', '${dm.id}', 'u01', '${S(1)}', 'win', 200, 200, 1, 201, 'x', 1)`) || ''), 'unique(match_id, user_id) хэвээр');
   ok(/permission denied/.test(fails(`set role service_role; update berx_rating_changes set delta = 1`) || '') && /permission denied/.test(fails(`set role service_role; delete from berx_ranking_audit`) || ''), 'ledger/audit өөрчлөгдөшгүй хэвээр');
   const em = ingest(comp()); const ep = payload(em);

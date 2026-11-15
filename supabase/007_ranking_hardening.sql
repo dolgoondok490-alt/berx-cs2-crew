@@ -5,6 +5,7 @@
 --
 -- berx_apply_rating-ийг солино: backend-ийн илгээсэн BRP-д шууд итгэхгүй, хадгалагдсан албан ёсны тоглолттой тулгана.
 --   • BRP хязгаар: Competitive хожил +150…+230, хожигдол −200…−130; AIM хожил яг +30, хожигдол яг −30.
+--   • Горим: хадгалсан тоглолтын горим (p.mode өгвөл таарах ёстой); автомат үед түгжээнээс гадуурх оролцогч → татгалзана.
 --   • Тоглогч: өөрчлөлт бүр түгжсэн roster-ын (lock) яг нэг тоглогч, бүх roster хамрагдсан, users.steam_id ↔ user_id таарна.
 --   • Дүн (win/loss): berx_match_players-ийн эцсийн багаас + berx_matches.winner-оос DB өөрөө тооцоолж тулгана.
 --   • Revision: p.revision = хадгалсан тоглолтын revision; хуучирсан (flag-тай / өөр revision) саналыг зөвшөөрөх боломжгүй.
@@ -18,7 +19,9 @@
 -- =========================================================
 
 -- ---------- Шалгагч: null = зөв, эсвэл шалтгаан (≤ 300) ----------
-create or replace function berx_rating_validate(p_match_id text, p_changes jsonb) returns text
+drop function if exists berx_rating_validate(text, jsonb);   -- (007-ийн өмнөх preview хувилбар; production-д байхгүй)
+-- p_strict = true (автомат): түгжээнд байгаагүй оролцогч байвал татгалзана. Approve (admin шалгасан) үед false.
+create or replace function berx_rating_validate(p_match_id text, p_changes jsonb, p_strict boolean default true) returns text
 language plpgsql stable security invoker set search_path = public as $$
 declare
   m record;
@@ -29,6 +32,7 @@ declare
 begin
   select id, mode, match_type, status, winner, target_rounds, started_at, lock into m from berx_matches where id = p_match_id;
   if not found then return 'match_not_found'; end if;
+  if m.mode is null or m.mode not in ('competitive', 'aim1v1', 'aim2v2') then return 'bad_mode'; end if;
 
   -- ----- Feature flag, идэвхжсэн агшин -----
   select * into s from berx_ranking_settings where id = 1;
@@ -56,6 +60,9 @@ begin
   if cardinality(v_ct) <> v_size or cardinality(v_t) <> v_size then return 'roster_size'; end if;
   v_all := v_ct || v_t;
   if (select count(distinct x) from unnest(v_all) x) <> cardinality(v_all) then return 'duplicate_player'; end if;
+  if (select count(*) from unnest(v_all) x where x !~ '^7656119[0-9]{10}$') > 0 then return 'bad_steam_id'; end if;
+  if p_strict and exists (select 1 from berx_match_players where match_id = m.id and steam_id <> all(v_all)
+                          and (coalesce(rounds_played, 0) > 0 or coalesce(kills, 0) > 0 or coalesce(deaths, 0) > 0)) then return 'unexpected_player'; end if;
 
   -- ----- Эцсийн баг (тал биш — бүлэг; halftime-д зөв) → ялагч бүлэг -----
   if (select count(*) from berx_match_players where match_id = m.id and steam_id = any(v_all)) <> cardinality(v_all) then return 'roster_player_missing'; end if;
@@ -117,11 +124,12 @@ begin
   select id, mode, match_type, status, winner, revision into m from berx_matches where id = v_mid for update;
   if not found then raise exception 'berx_apply_rating: match not found' using errcode = '22023'; end if;
   if v_rev <> m.revision then raise exception 'berx_apply_rating: stale revision (got %, stored %)', v_rev, m.revision using errcode = '22023'; end if;
+  if p ? 'mode' and p->>'mode' is distinct from m.mode then raise exception 'berx_apply_rating: mode mismatch (got %, stored %)', p->>'mode', m.mode using errcode = '22023'; end if;
 
   if v_action = 'auto' then
     if v_status not in ('rated', 'not_eligible', 'review', 'error') then raise exception 'berx_apply_rating: bad status' using errcode = '22023'; end if;
     if v_status = 'rated' then
-      v_err := berx_rating_validate(v_mid, v_changes);
+      v_err := berx_rating_validate(v_mid, v_changes, true);
       if v_err is not null then      -- BRP олгохгүй, admin-д харагдах алдаа болгоно
         v_status := 'error'; v_reason := 'error'; v_note := left('db_validation: ' || v_err, 300);
       end if;
@@ -162,7 +170,7 @@ begin
          (select coalesce(jsonb_agg(jsonb_build_array(x->>'user_id', x->>'steam_id', x->>'result', x->>'delta_calc') order by x->>'user_id'), '[]') from jsonb_array_elements(r.proposal->'changes') x)
       then raise exception 'berx_apply_rating: changes differ from stored proposal' using errcode = '22023'; end if;
       v_changes := r.proposal->'changes';
-      v_err := berx_rating_validate(v_mid, v_changes);
+      v_err := berx_rating_validate(v_mid, v_changes, false);
       if v_err is not null then raise exception 'berx_apply_rating: validation failed: %', v_err using errcode = '22023'; end if;
     end if;
     insert into berx_ranking_audit (action, target, detail, reason, admin_id, created_at)
@@ -199,5 +207,5 @@ begin
 end $$;
 
 -- ---------- Эрх: зөвхөн server (service_role) ----------
-revoke all on function berx_rating_validate(text, jsonb), berx_apply_rating(jsonb) from public, anon, authenticated;
-grant execute on function berx_rating_validate(text, jsonb), berx_apply_rating(jsonb) to service_role;
+revoke all on function berx_rating_validate(text, jsonb, boolean), berx_apply_rating(jsonb) from public, anon, authenticated;
+grant execute on function berx_rating_validate(text, jsonb, boolean), berx_apply_rating(jsonb) to service_role;

@@ -89,6 +89,7 @@ begin
   end loop;
   return jsonb_build_object('ok', true, 'existing', false, 'status', 'rated', 'changes', v_out);
 end $$;
+drop function if exists berx_rating_validate(text, jsonb, boolean);
 drop function if exists berx_rating_validate(text, jsonb);
 revoke all on function berx_apply_rating(jsonb) from public, anon, authenticated;
 grant execute on function berx_apply_rating(jsonb) to service_role;

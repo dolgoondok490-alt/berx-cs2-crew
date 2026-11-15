@@ -69,7 +69,7 @@
     unlinked_player: 'Steam-ээ BERX бүртгэлтэй холбоогүй тоглогч оролцсон', duplicate_player: 'Давхардсан тоглогч', duplicate_ref: 'Давхардсан тоглолт',
     rules_mismatch: 'Тоглолтын дүрэм түгжсэнээс өөрчлөгдсөн', extra_player: 'Түгжсэн бүрэлдэхүүнд байгаагүй тоглогч оролцсон', team_mismatch: 'Багийн бүрэлдэхүүн тоглолтын явцад өөрчлөгдсөн',
     low_participation: 'Тоглогч тоглолтын ихэнх хэсгийг тоглоогүй (гарсан)', too_short: 'Хэт богино тоглолт', farming_lineup: 'Ижил бүрэлдэхүүн 24 цагийн дотор олон удаа тоглосон',
-    error: 'Тооцоолоход алдаа гарсан — admin шалгана'
+    error: 'Тооцоолоход алдаа гарсан — admin шалгана', historical_import: 'Чансаанд нөхөн бүртгэсэн'
   };
   const why = (rk) => (!rk ? '' : rk.status === 'review' ? `${REASON[rk.reason] || rk.reason} — admin шалгаж байна` : REASON[rk.reason] || STATUS[rk.status] || '');
   const fmtDelta = (d) => (d > 0 ? '+' : d < 0 ? '−' : '±') + Math.abs(d);
