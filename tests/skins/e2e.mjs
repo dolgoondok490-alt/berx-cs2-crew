@@ -60,7 +60,7 @@ r = await act(Bu, 'skins.save', { loadout: { '3': { weapons: { [usp.d]: { p: usp
 fs.writeFileSync(path.join(tmp, 'agent.env'), `BERX_URL=http://127.0.0.1:${sitePort}\nSERVER_AGENT_SECRET=${SECRET}\nRCON_HOST=127.0.0.1\nRCON_PORT=${rconPort}\nRCON_PASSWORD=${RCON_PW}\nEVENTS_PORT=${evPort}\nPOLL_MS=2000\nPUBLIC_ADDRESS=203.0.113.9:27015\n`);
 fs.writeFileSync(path.join(tmp, '.env.skins'), `SKINS_SYNC_ENABLED=1\nWP_DB_HOST=127.0.0.1\nWP_DB_PORT=${proxyPort}\nWP_DB_NAME=${DB}\nWP_DB_USER=berx_agent\nWP_DB_PASSWORD=${AGENT_PW}\nSKINS_POLL_MS=5000\nSKINS_REFRESH=1\n`);
 const agentLog = path.join(tmp, 'agent.log');
-run('node', [path.join(ROOT, 'agent/berx-agent.js')], { BERX_AGENT_ENV: path.join(tmp, 'agent.env') }, agentLog);
+run('node', [path.join(ROOT, 'agent/berx-agent.js')], { BERX_AGENT_ENV: path.join(tmp, 'agent.env'), BERX_MATCHES_STATE: path.join(tmp, 'matches.json') }, agentLog);
 
 const synced = (u, v) => until(async () => { const s = await state(u); return s.sync && s.sync.status === 'ok' && s.sync.version >= v ? s : null; }, 40000);
 let sA = await synced(A, 1); ok(!!sA, 'A loadout synced by agent (site shows ok)');

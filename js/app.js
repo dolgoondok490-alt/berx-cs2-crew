@@ -5,7 +5,7 @@
   'use strict';
   const U = window.BerxUI, A = window.BerxAPI, S = window.BerxStore, PAGES = window.BerxPages;
   const { icon, esc, Avatar } = U;
-  const ROUTES = ['dashboard', 'invite', 'stats', 'leaderboard', 'awards', 'server', 'skins', 'admin'];
+  const ROUTES = ['dashboard', 'invite', 'stats', 'leaderboard', 'awards', 'server', 'matches', 'skins', 'admin'];
   const root = document.getElementById('app');
 
   const App = window.BerxApp = {

@@ -3,7 +3,7 @@
   'use strict';
   const U = window.BerxUI, A = window.BerxAPI;
   const { icon, esc, Avatar, CardHead, StatTile } = U;
-  const ui = () => (window.BerxApp.ui.stats ||= { member: null, tab: 'overview', lbTab: 'premier' });
+  const ui = () => (window.BerxApp.ui.stats ||= { member: null, tab: 'overview', lbTab: 'premier', berxMode: 'all' });
   const has = (v) => v !== null && v !== undefined && !Number.isNaN(+v);
   const f = (v, d = 0, suf = '') => has(v) ? (+v).toFixed(d) + suf : '—';
   const big = (v) => has(v) && +v ? (+v).toLocaleString('en-US') : '—';
@@ -13,6 +13,36 @@
     return list.map(x => U.MatchRow(x, opts)).join('');
   }
   function aggOf(list) { return A.aggregate(list); }
+
+  /* ---------- BERX ARENA (серверийн тоглолтын түүх) — FACEIT/Premier/Leetify-аас тусдаа ---------- */
+  const BERX_MODES = [['all', 'Бүгд'], ['competitive', 'Competitive'], ['aim1v1', 'AIM 1v1'], ['aim2v2', 'AIM 2v2']];
+  function berxTab(m, u) {
+    const MH = window.BerxPages.matches;
+    if (!A.isLive()) return '<div class="card mt empty-state"><div class="e">🛰️</div>BERX ARENA-ийн статистик зөвхөн сервертэй холбогдсон сайтад харагдана.</div>';
+    if (!m.steamId) return `<div class="card mt empty-state"><div class="e">🔗</div>${esc(m.nick)}-ийн Steam ID холбоогүй тул BERX ARENA-ийн тоглолтыг тодорхойлох боломжгүй.</div>`;
+    const mode = u.berxMode || 'all', st = MH.playerStats(m.steamId, mode), d = st.data;
+    const seg = `<div class="seg mt" role="tablist">${BERX_MODES.map(([k, l]) => `<button class="${mode === k ? 'on' : ''}" data-action="stats-berx-mode" data-v="${k}">${l}</button>`).join('')}</div>`;
+    if (st.loading) return seg + '<div class="card mt empty-state"><div class="e">⏳</div>BERX статистик ачаалж байна...</div>';
+    if (st.error || !d) return seg + '<div class="card mt empty-state"><div class="e">⚠️</div>BERX статистик ачаалагдсангүй. Дахин оролдоно уу.</div>';
+    if (!d.matches && !d.unfinished) return seg + `<div class="card mt empty-state"><div class="e">🎮</div>${esc(m.nick)} ${mode === 'all' ? 'BERX ARENA серверт' : (MH.MODE[mode] + ' горимд')} бүртгэгдсэн тоглолт хараахан тоглоогүй байна.</div>`;
+    const v = (x, dg = 0, suf = '') => (x === null || x === undefined ? '—' : (+x).toFixed(dg) + suf);
+    return `${seg}
+      <div class="statrow mt">
+        ${StatTile('Тоглолт', d.matches, null, { ic: 'stats' })}
+        ${StatTile('Хожил / Хожигдол', `<span class="win">${d.wins}</span> <span class="dim">/</span> <span class="loss">${d.losses}</span>${d.draws ? ` <span class="dim" style="font-size:14px">· ${d.draws} тэнцсэн</span>` : ''}`, null, { ic: 'trophy' })}
+        ${StatTile('Win Rate', v(d.winRate, 0, '%'), null, { ic: 'trophy' })}
+        ${StatTile('K/D', v(d.kd, 2), null, { ic: 'target' })}
+        ${StatTile('Headshot %', v(d.hsPct, 0, '%'), null, { ic: 'skull' })}
+        ${StatTile('ADR', v(d.adr, 1), null, { ic: 'zap' })}
+      </div>
+      <div class="row wrap mt" style="gap:8px">
+        <span class="chip">Нийт kill: <b>${d.kills}</b></span><span class="chip">Нийт death: <b>${d.deaths}</b></span><span class="chip">Нийт assist: <b>${d.assists}</b></span>
+        ${d.unfinished ? `<span class="chip" title="Зогсоосон/тасалдсан тоглолт нийт дүнд орохгүй">Дуусаагүй: ${d.unfinished}</span>` : ''}
+      </div>
+      <div class="dim mt" style="font-size:11.5px">Зөвхөн дууссан тоглолтоор тооцно. K/D, HS%, ADR нь нийт дүнгээс (тоглолт бүрийн дундаж биш).${d.adr === null ? ' ADR — damage бүртгэгдсэн тоглолт алга.' : d.adrMatches < d.matches ? ` ADR — damage бүртгэгдсэн ${d.adrMatches} тоглолтоос.` : ''}</div>
+      <div class="card mt mh-list">${CardHead('history', 'Сүүлийн BERX тоглолтууд', '<button class="link" data-action="go" data-route="matches">Бүгд ' + icon('arrow').replace('<svg', '<svg style="width:13px"') + '</button>')}
+        ${d.recent.length ? d.recent.map(MH.row).join('') : '<div class="empty-state">Тоглолт алга</div>'}</div>`;
+  }
 
   function render() {
     const u = ui();
@@ -84,6 +114,7 @@
           ${[...new Set([...A.maps.map(x => x.id), ...all.map(x => x.map)])].map(id => { const l = all.filter(x => x.map === id); return { id, g: aggOf(l) }; }).filter(r => r.g.matches || A.maps.some(x => x.id === r.id)).sort((a, b) => b.g.matches - a.g.matches)
             .map(({ id, g }) => { const mp = A.mapInfo(id); return `<tr><td><div class="row"><div style="width:54px;height:34px;border-radius:6px;background:${mp.img ? `url(${mp.img}) center/cover` : 'linear-gradient(135deg,#3a3f46,#1c1e22)'}"></div><b>${esc(mp.name)}</b></div></td><td>${g.matches}</td><td class="${g.wr >= 50 ? 'win' : 'loss'}"><b>${g.matches ? g.wr + '%' : '—'}</b></td><td>${g.matches && g.d ? g.kd.toFixed(2) : '—'}</td><td>${g.adr || '—'}</td><td><div class="bar"><i style="width:${g.wr}%"></i></div></td></tr>`; }).join('')}
           </tbody></table></div>`}</div>`,
+      berx: u.tab === 'berx' ? berxTab(m, u) : '',
       trend: `
         ${live ? '' : `<div class="card mt">${CardHead('trend', 'FACEIT ELO өсөлт / бууралт')}${U.LineChart(demoTrend, { label: 'ELO', h: 240 })}</div>`}
         ${premTrend.length > 1 ? `<div class="card mt">${CardHead('trend', 'Premier rating')}${U.LineChart(premTrend, { label: 'Premier', h: 220 })}</div>` : ''}
@@ -119,7 +150,7 @@
             </div>
           </div>
           <div class="tabs mt">
-            ${[['overview', 'stats', 'Ерөнхий'], ['faceit', 'zap', 'FACEIT'], ['premier', 'trophy', 'Premier'], ['maps', 'map', 'Газрын статистик'], ['trend', 'trend', 'График']].map(([k, ic, l]) => `<button class="${u.tab === k ? 'on' : ''}" data-action="stats-tab" data-v="${k}">${icon(ic)} ${l}</button>`).join('')}
+            ${[['overview', 'stats', 'Ерөнхий'], ['faceit', 'zap', 'FACEIT'], ['premier', 'trophy', 'Premier'], ['berx', 'server', 'BERX ARENA'], ['maps', 'map', 'Газрын статистик'], ['trend', 'trend', 'График']].map(([k, ic, l]) => `<button class="${u.tab === k ? 'on' : ''}" data-action="stats-tab" data-v="${k}">${icon(ic)} ${l}</button>`).join('')}
           </div>
           ${tabBody[u.tab]}
         </div>
@@ -149,7 +180,9 @@
   const actions = {
     'stats-tab'(el) { ui().tab = el.dataset.v; return true; },
     'stats-lb'(el) { ui().lbTab = el.dataset.v; return true; },
-    'stats-member'(el) { ui().member = el.dataset.id; window.scrollTo({ top: 0, behavior: 'smooth' }); return true; }
+    'stats-member'(el) { ui().member = el.dataset.id; window.scrollTo({ top: 0, behavior: 'smooth' }); return true; },
+    'stats-berx-mode'(el) { ui().berxMode = el.dataset.v; return true; },
+    'mh-open'(el) { window.BerxPages.matches.openMatch(el.dataset.id); }
   };
   function mount(root) {
     root.querySelector('[data-stats-member]')?.addEventListener('change', e => { ui().member = e.target.value; window.BerxApp.render(); });
