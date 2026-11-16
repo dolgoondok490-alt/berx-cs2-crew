@@ -71,6 +71,14 @@ console.log('\n== RCON client');
   r.close(); S.close();
 }
 {
+  // echo маркер ирдэггүй сервер (echo гаралтгүй) → командын хариунаас хойш grace хугацаанд дуусгана, timeout БИШ
+  const S = await server(async (b) => (b.startsWith('echo ') ? '' : b === 'css_berx_guard_status' ? G : ''));
+  const r = new Rcon('127.0.0.1', S.port, 'pw', { markerGraceMs: 300 }); await r.connect();
+  const t0 = Date.now(); const q = await r.query('css_berx_guard_status', { timeout: 4000 });
+  ok(q.status === 'ok' && parseGuard(q.body).state === 'ok' && q.marker === false && Date.now() - t0 < 1500 && r.stats.markerMissing === 1 && r.stats.timeouts === 0, 'echo маркергүй сервер → хариуг grace-ээр авна (timeout/reconnect биш)');
+  r.close(); S.close();
+}
+{
   // CS2 гаралтыг дараагийн (маркерын) хариунд хийсэн тохиолдол
   const S = await server(async (b, c, st) => (b === 'late' ? '' : b.startsWith('echo ') ? ['late-output\n', b.slice(5)] : 'x'));
   const r = new Rcon('127.0.0.1', S.port, 'pw'); await r.connect();

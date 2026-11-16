@@ -25,6 +25,7 @@ class Rcon {
     this.chain = Promise.resolve();
     this.log = opts.log || (() => {});
     this.quietMs = opts.quietMs || 120;
+    this.markerGraceMs = opts.markerGraceMs || 1500;
     this.stats = { timeouts: 0, empty: 0, consecutiveTimeouts: 0, lastDataAt: 0, lastOkAt: 0, reconnects: 0, desync: 0, connectedAt: 0 };
   }
   packet(id, type, body) {
@@ -77,6 +78,7 @@ class Rcon {
       if (!p) continue;                                      // хугацаа нь дууссан эсвэл хариу хэрэггүй (send)
       if (p.marker) { p.onMarker(body); continue; }
       p.chunks.push(body);
+      if (p.onChunk) p.onChunk();
       if (p.quiet) { clearTimeout(p.t); p.t = setTimeout(() => this.finish(id, 'ok'), this.quietMs); }
     }
   }
@@ -131,14 +133,18 @@ class Rcon {
       let done = false;
       const end = (status) => {
         if (done) return; done = true;
-        clearTimeout(entry.guard); this.pending.delete(id); this.pending.delete(mid);
+        clearTimeout(entry.guard); clearTimeout(entry.t); this.pending.delete(id); this.pending.delete(mid);
         // CS2 зарим гаралтыг дараагийн хариунд оруулж болзошгүй — маркерын хариуны маркераас бусад хэсгийг нэмнэ
         const extra = marker.chunks.join('').split(/\r?\n/).filter(l => l.trim() && !l.includes(token)).join('\n');
         const body = entry.chunks.join('') + (extra ? '\n' + extra : '');
         if (status === 'timeout') this.noteTimeout(); else this.noteOk(body);
-        resolve({ status: status === 'timeout' ? 'timeout' : body.trim() ? 'ok' : 'empty', body, ms: Date.now() - t0 });
+        if (status === 'nomarker') this.stats.markerMissing = (this.stats.markerMissing || 0) + 1;
+        resolve({ status: status === 'timeout' ? 'timeout' : body.trim() ? 'ok' : 'empty', body, ms: Date.now() - t0, marker: status === 'ok' });
       };
       entry.resolve = () => {};
+      // echo маркер ирэхгүй сервер (эсвэл echo гаралтгүй) байсан ч: командын өөрийн хариу ирснээс хойш
+      // markerGraceMs чимээгүй болвол дууссан гэж үзнэ (огт хариугүй үед л "timeout").
+      entry.onChunk = () => { clearTimeout(entry.t); entry.t = setTimeout(() => end('nomarker'), this.markerGraceMs); };
       marker.onMarker = (b) => { marker.chunks.push(b); if (marker.chunks.join('').includes(token)) end('ok'); };
       marker.resolve = () => {};
       entry.guard = setTimeout(() => end('timeout'), timeout);

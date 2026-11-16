@@ -85,7 +85,7 @@ ok(bRows.length === 1 && bRows[0].weapon_defindex === usp.d, 'B isolated: only o
 ok(!!(await until(() => fs.readFileSync(rconLog, 'utf8').split('\n').filter(l => l === 'wp_refresh ' + A_SID).length >= 2, 8000)), 'wp_refresh <A> sent (twice, async reload)');
 const rc = fs.readFileSync(rconLog, 'utf8');
 ok(!rc.includes('wp_refresh ' + B_SID), 'no wp_refresh for offline B');
-ok(rc.split('\n').filter(Boolean).every(l => /^(status_json|status|css_plugins list|css_berx_guard_status|wp_refresh 7656119\d{10}|mp_\w+|sv_\w+|game_\w+|matchzy_[\w ".:\/-]+|maps \*|changelevel de_\w+)$/.test(l)), 'RCON received only allowlisted commands');
+ok(rc.split('\n').filter(Boolean).every(l => /^(status_json|status|css_plugins list|css_berx_guard_status|echo BERX_RCON_END_\d+|wp_refresh 7656119\d{10}|mp_\w+|sv_\w+|game_\w+|matchzy_[\w ".:\/-]+|maps \*|changelevel de_\w+)$/.test(l)), 'RCON received only allowlisted commands');
 
 // StatTrak тоолуур хадгалагдана, wear шинэчлэгдэнэ
 await q(`UPDATE ${DB}.wp_player_skins SET weapon_stattrak_count = 42 WHERE steamid = ? AND weapon_team = 3 AND weapon_defindex = ?`, [A_SID, ak.d]);
