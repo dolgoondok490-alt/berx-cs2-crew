@@ -16,6 +16,15 @@ jobs:
         with: { node-version: 20 }
       - name: Syntax check
         run: for f in agent/rcon.js agent/guard.js agent/berx-agent.js agent/arena-modes.js agent/skins-sync.js agent/match-recorder.js agent/match-history.js lib/*.js js/pages/*.js js/services/*.js js/app.js tests/server/fake-cs2.js; do node --check "$f" || exit 1; done
+      - name: PowerShell syntax (agent/windows/*.ps1)
+        shell: pwsh
+        run: |
+          foreach ($f in Get-ChildItem agent/windows/*.ps1) {
+            $t = $null; $e = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$t, [ref]$e) | Out-Null
+            if ($e.Count) { $e | ForEach-Object { Write-Error "$($f.Name): $($_.Message) @ $($_.Extent.StartLineNumber)" }; exit 1 }
+            Write-Host "ok $($f.Name)"
+          }
       - name: Catalog JSON valid
         run: node -e "const a=require('./agent/arena-modes'); const c=a.loadCatalog(); console.log(c.map(m=>m.id+'='+m.workshopId).join(', '))"
       - name: RCON client + BERX Guard unit (fragmented packets, empty/timeout/reconnect, parser, lock)
