@@ -15,11 +15,11 @@ param(
   [string]$AgentDir = "$env:USERPROFILE\Downloads\berx-cs2-crew-main\agent"
 )
 $ErrorActionPreference = 'Stop'
-$Commit = '3082a5e52e22c3bdad9fce8498b255183d18fb99'
+$Commit = '10db7a5a0d11e6e2e7acd93bb3c4bd510c706729'
 $Raw = "https://raw.githubusercontent.com/dolgoondok490-alt/berx-cs2-crew/$Commit/agent"
 $Files = [ordered]@{
   'berx-agent.js'           = 'da7e9a6048b41f3e976ea79c2b797b0ba84c616c0af510e879ad00a470209e3f'
-  'rcon.js'                 = 'f912308f72060ddbea804ef76f794b53a40600a07b3740d574853b1b9274aff1'
+  'rcon.js'                 = '29dfbbcc70b9a86a6bdc4edf095fe2b90a41613c2a5bf2fae2030a2d338c38e5'
   'guard.js'                = '93b7235b7a6e1c678368b6348193116af561b4fcfa966911a07b046c9f30b7d8'
   'match-history.js'        = '042e0a5697c8e82e66220815b909fc7a422baf7c3199db86e5e1d7ecd9862ab7'
   'tools/guard-diagnose.js' = '856a7000354cdcd72b574bbdcdce9736c14d438f7447ebcfead17be38867c911'
