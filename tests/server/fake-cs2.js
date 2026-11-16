@@ -71,6 +71,7 @@ function roundStart(kind) {
 
 function loadMap(m) {
   S.map = m; S.mapLoadedAt = Date.now(); log(`#MAPLOAD ${m}`);
+  if (S.guard.resetOnMap) { S.guard.enforcing = false; log('#GUARD reset (plugin reload simulated)'); }
   fireMapLogic('load');
   // MatchZy OnMapStart → 1с дараа AutoStart (0 = sleep.cfg, 1 = warmup)
   setTimeout(() => {
@@ -124,8 +125,12 @@ function run(body) {
   if (w[0] === 'matchzy_remote_log_header_value' && w[1]) { (S.mz ||= {}).value = c.match(/"([^"]+)"/)[1]; return ''; }
   if (w[0] === 'matchzy_autostart_mode') { if (w[1] !== undefined) S.autostart = +w[1]; return ''; }
   if (c === 'css_restart') { S.restarts++; return ''; }
+  if (w[0] === 'echo') return c.slice(5);
   if (/^css_berx_guard_(status|on|off)$/.test(c)) {
     if (!S.guard.installed) return `Unknown command '${c}'!`;
+    if (S.guard.empty > 0) { S.guard.empty--; return ''; }                 // CS2 хоосон хариу өгсөн (дууриамал)
+    if (S.guard.degraded) return `BERX_GUARD degraded v=1.0.0 enforcing=0 cheats=0 killed=0 reverts=0 blocked=0`;
+    if (c === 'css_berx_guard_on' && S.guard.failOn) return guardStatus();   // асаалт хэрэгжээгүй (дууриамал)
     if (c === 'css_berx_guard_on') { S.guard.enforcing = true; if (cv.sv_cheats !== '0') setCv('sv_cheats', '0'); }
     if (c === 'css_berx_guard_off') S.guard.enforcing = false;
     return guardStatus();
@@ -148,8 +153,21 @@ function run(body) {
   return '';
 }
 const pk = (id, type, body) => { const b = Buffer.from(body); const p = Buffer.alloc(14 + b.length); p.writeInt32LE(10 + b.length, 0); p.writeInt32LE(id, 4); p.writeInt32LE(type, 8); b.copy(p, 12); return p; };
+const CONNS = new Set();
+S.rconConnections = 0;
+const out = (s, b) => {                                        // fragment горимд: пакетыг 1–7 байтаар хэсэглэн (дарааллаа хадгалан) илгээнэ
+  if (!S.fragment && !(s.q && s.q.length)) return s.write(b);
+  (s.q ||= []).push(b); if (s.q.length > 1) return;
+  let i = 0; const step = () => {
+    if (s.destroyed) return; const cur = s.q[0]; if (!cur) return;
+    const n = 1 + (i % 7); s.write(cur.slice(i, i + n)); i += n;
+    if (i >= cur.length) { s.q.shift(); i = 0; }
+    if (s.q.length) setImmediate(step);
+  }; step();
+};
 net.createServer(s => {
   let buf = Buffer.alloc(0), authed = false; s.on('error', () => {});
+  const conn = { stalled: false }; CONNS.add(conn); S.rconConnections++; s.on('close', () => CONNS.delete(conn));
   const pump = () => {
     if (Date.now() < S.busyUntil) return setTimeout(pump, S.busyUntil - Date.now() + 5);   // "завгүй" сервер: хариу хойшилно
     while (buf.length >= 4) {
@@ -157,7 +175,8 @@ net.createServer(s => {
       const id = buf.readInt32LE(4), t = buf.readInt32LE(8), body = buf.slice(12, 4 + n - 2).toString(); buf = buf.slice(4 + n);
       if (t === 3) { authed = body === pass; s.write(pk(id, 0, '')); s.write(pk(authed ? id : -1, 2, '')); continue; }
       if (!authed) continue;
-      s.write(pk(id, 0, run(body)));
+      if (conn.stalled) { log('#STALLED ' + body); continue; }
+      out(s, pk(id, 0, run(body)));
       if (Date.now() < S.busyUntil) return setTimeout(pump, S.busyUntil - Date.now() + 5);
     }
   };
@@ -173,7 +192,20 @@ http.createServer(async (req, res) => {
   if (u.pathname === '/emit-raw') { const t = body; for (const x of S.logHttp) await fetch(x, { method: 'POST', body: t }).catch(() => {}); res.writeHead(200); return res.end('{}'); }
   if (u.pathname === '/set-players') { S.players = JSON.parse(body); res.writeHead(200); return res.end('{}'); }
   if (u.pathname === '/fail-next') S.failNext = true;
-  if (u.pathname === '/guard') { S.guard.installed = u.searchParams.get('installed') === '1'; if (!S.guard.installed) S.guard.enforcing = false; }
+  if (u.pathname === '/guard') {
+    const q = (k) => u.searchParams.get(k);
+    if (q('installed') !== null) { S.guard.installed = q('installed') === '1'; if (!S.guard.installed) S.guard.enforcing = false; }
+    if (q('empty') !== null) S.guard.empty = +q('empty');
+    if (q('degraded') !== null) S.guard.degraded = q('degraded') === '1';
+    if (q('failOn') !== null) S.guard.failOn = q('failOn') === '1';
+    if (q('resetOnMap') !== null) S.guard.resetOnMap = q('resetOnMap') === '1';
+    if (q('enforcing') !== null) S.guard.enforcing = q('enforcing') === '1';
+  }
+  // RCON-ын эвдрэл дууриах: stall=1 → одоогийн бүх холболт хариу өгөхөө больно (TCP нээлттэй хэвээр); fragment=1 → хариуг жижиг хэсгээр
+  if (u.pathname === '/rcon') {
+    if (u.searchParams.get('stall') === '1') { for (const c of CONNS) c.stalled = true; }
+    if (u.searchParams.get('fragment') !== null) S.fragment = u.searchParams.get('fragment') === '1';
+  }
   if (u.pathname === '/round') playRound(u.searchParams.get('w'));
   if (u.pathname === '/rounds') { for (const x of (u.searchParams.get('seq') || '').split(',')) playRound(x); }
   if (u.pathname === '/no-winlimit') S.noWinlimit = u.searchParams.get('v') !== '0';
@@ -183,5 +215,5 @@ http.createServer(async (req, res) => {
   res.writeHead(200, { 'content-type': 'application/json' });
   res.end(JSON.stringify({ map: S.map, autostart: S.autostart, busy: Date.now() < S.busyUntil, cv, sleepAt: S.sleepAt, restarts: S.restarts, configLog: S.configLog.slice(-200), players: S.players,
     logOn: S.logOn, logHttp: S.logHttp, score: S.score, played: S.played, over: S.over, gameOvers: S.gameOvers,
-    mapCmds: S.mapCmds, spawns: S.spawns.slice(-60), roundEnds: S.roundEnds.slice(-60), cheatsWindows: S.cheatsWindows.slice(-200), cheatsOnAt: S.cheatsOnAt, guard: S.guard }));
+    mapCmds: S.mapCmds, spawns: S.spawns.slice(-60), roundEnds: S.roundEnds.slice(-60), cheatsWindows: S.cheatsWindows.slice(-200), cheatsOnAt: S.cheatsOnAt, guard: S.guard, rconConnections: S.rconConnections }));
 }).listen(+ctlPort, '127.0.0.1');

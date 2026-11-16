@@ -55,6 +55,8 @@ namespace BerxLauncher.Tests
             File.Copy(node, srvExe);
             File.Copy(node, Path.Combine(gameDir, "cs2.exe"));
             File.Copy(agentSrc, Path.Combine(agentDir, "berx-agent.js"));
+            // agent 1.5.1+: RCON/Guard модулиуд (agent хавтасны бусад файлтай хамт суудаг)
+            foreach (var m in new[] { "rcon.js", "guard.js" }) File.Copy(Path.Combine(Path.GetDirectoryName(agentSrc), m), Path.Combine(agentDir, m));
 
             int rconPort = FreePort(), sitePort = FreePort(), evPort = FreePort();
             const string pass = "e2e-rcon-pass-777";
