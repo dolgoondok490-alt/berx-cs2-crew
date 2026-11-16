@@ -11,6 +11,7 @@ $agentDir = Join-Path $root 'berx-cs2-crew-main\agent'
 New-Item -ItemType Directory -Force $srvDir, $gameDir, $agentDir, $Out | Out-Null
 Copy-Item $node (Join-Path $srvDir 'cs2.exe'); Copy-Item $node (Join-Path $gameDir 'cs2.exe')
 Copy-Item "$PSScriptRoot\..\..\agent\berx-agent.js" $agentDir
+foreach ($m in @("rcon.js", "guard.js")) { Copy-Item "$PSScriptRoot\..\..\agent\$m" $agentDir }   # agent 1.5.1+ modules
 function FreePort { $l = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0); $l.Start(); $p = $l.LocalEndpoint.Port; $l.Stop(); $p }
 $rcon = FreePort; $sitePort = FreePort; $ev = FreePort
 $marker = Join-Path $root 'marker.txt'; $hb = Join-Path $root 'hb.txt'
