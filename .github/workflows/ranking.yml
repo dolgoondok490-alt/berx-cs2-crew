@@ -1,7 +1,7 @@
 name: BERX RANKED & BRP
 on:
   push:
-    branches: ['berx-ranking-v1', 'ranking-db-hardening', 'main']
+    branches: ['ranked-aim-guard-fix', 'berx-ranking-v1', 'ranking-db-hardening', 'main']
     paths: ['lib/**', 'agent/**', 'server/**', 'js/**', 'css/**', 'index.html', 'supabase/**', 'scripts/**', 'docs/historical-import/**', 'tests/**', '.github/workflows/ranking.yml']
   workflow_dispatch:
 permissions:

@@ -159,3 +159,11 @@ CS2_DIR=C:\cs2-server
 * Анхдагч: Casual. Хуучин (1.4.0) agent-ийн бүх тоглолт Casual.
 * Ranked AIM нь BERX Guard (`plugins/BerxGuard`) ажиллаж байхад л эхэлнэ; agent өөрөө `css_berx_guard_status/on/off`-оор шалгана. Casual AIM Guard-гүй хэвийн.
 * Шинэчлэх, буцаах, Guard суулгах, flag идэвхжүүлэх: `docs/RANKING.md`.
+
+## v1.5.1 — Ranked AIM / BERX Guard илрүүлэлтийн засвар
+* **RCON** (`rcon.js`): бүх хүсэлт дараалан (давхцахгүй); Guard-ийн уншилт `echo BERX_RCON_END_<id>` маркераар хариуны төгсгөлийг найдвартай тогтооно; хоосон хариу / timeout / тасарсан холболт / эвдэрсэн пакетыг ялгана; TCP keepalive.
+* **BERX Guard** (`guard.js`): v1.0.0-ийн хариуг өмнө/хойно console мөр, `\r\n`, ANSI-тай ч зөв уншина. Ангилал: `ok | degraded | not_installed | empty | timeout | rcon_down | invalid`. Хязгаартай дахин оролдлого (3), timeout үед RCON-ыг дахин холбоно (map татаж/ачаалж байхад биш).
+* Ranked AIM зөвхөн `ok` + асаалт + дахин уншиж `enforcing=1` + `cheats=0` батлагдсан үед. Map ачаалагдсаны дараа тоглолт эхлэхээс өмнө, мөн 15с тутам дахин шалгана; унтарсан бол дахин асаана; баталгаажихгүй бол тоглолт BRP авахгүй (lock-д тэмдэглэнэ).
+* Casual / Competitive / Practice руу шилжихэд Guard-ийг (кэшээс үл хамааран) унтраана. Ranked AIM-аас гадуур асаалттай үлдсэн бол дараагийн шалгалтаар унтраана.
+* Командын татгалзал (жишээ нь Guard баталгаажаагүй) `⚠ Команд амжилтгүй` гэж бичигдэнэ — launcher "Agent Error / SERVER OFFLINE" гэж харуулахгүй. RCON удааширсан үед ч heartbeat тасрахгүй.
+* Оношилгоо (зөвхөн уншина): `node tools/guard-diagnose.js 5`

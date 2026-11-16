@@ -59,6 +59,11 @@ function createMatchHistory({ env = process.env, dir = __dirname, version, log =
     onLog(body, ctx) { if (!enabled) return; rec.onLog(body, ctx); collect(); },
     // agent tick бүр (5с): roster, map/горим/онлайн шалгалт, дараалал илгээх
     tick(ctx) { if (!enabled) return; rec.setRoster(ctx.players); rec.check(ctx); collect(); flush().catch(() => {}); },
+    // Ranked AIM-ийн явцад BERX Guard баталгаажихгүй болсон → түгжээнд тэмдэглэнэ (сайт guard_missing гэж BRP өгөхгүй)
+    markGuardLost(at) {
+      if (!enabled || !rec.live || !rec.live.lock || !rec.live.lock.guard || rec.live.lock.guard.ok === false) return false;
+      rec.live.lock.guard = { ...rec.live.lock.guard, ok: false, lost_at: at }; save(); return true;
+    },
     save,
     status: () => ({ enabled, live: rec.live ? { mode: rec.live.mode, rounds: rec.live.rounds } : null, queued: queue.items.length, rejected: queue.rejected.length }),
     _rec: rec, _queue: queue

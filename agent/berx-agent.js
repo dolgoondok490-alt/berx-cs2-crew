@@ -15,11 +15,10 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const net = require('net');
 const http = require('http');
 const crypto = require('crypto');
 
-const VERSION = '1.5.0';
+const VERSION = '1.5.1';
 
 /* ---------- тохиргоо ---------- */
 (function loadEnv() {
@@ -52,70 +51,12 @@ function fatal(msg) { console.error('✖ ' + msg); process.exit(1); }
 if (CFG.secret.length < 24) fatal('SERVER_AGENT_SECRET (24+ тэмдэгт) agent/.env-д тохируулна уу — Vercel дээрхтэй ИЖИЛ байх ёстой.');
 if (!CFG.rconPassword) fatal('RCON_PASSWORD agent/.env-д тохируулна уу (server.cfg-ийн rcon_password-тэй ижил).');
 
-/* =========================================================
- * Source RCON client (CS2: -usercon параметртэй асаана)
- * packet: int32 size | int32 id | int32 type | body\0 | \0
- * ========================================================= */
-class Rcon {
-  constructor(host, port, password) { Object.assign(this, { host, port, password }); this.sock = null; this.id = 10; this.buf = Buffer.alloc(0); this.pending = new Map(); this.ready = false; }
-  packet(id, type, body) {
-    const b = Buffer.from(body, 'utf8'); const p = Buffer.alloc(14 + b.length);
-    p.writeInt32LE(10 + b.length, 0); p.writeInt32LE(id, 4); p.writeInt32LE(type, 8); b.copy(p, 12); p.writeInt16LE(0, 12 + b.length); return p;
-  }
-  connect() {
-    return new Promise((resolve, reject) => {
-      const s = net.createConnection({ host: this.host, port: this.port });
-      const fail = (e) => { this.ready = false; reject(e); };
-      s.setTimeout(8000, () => { s.destroy(new Error('RCON timeout')); });
-      s.once('error', fail);
-      s.on('data', (d) => this.onData(d));
-      s.on('close', () => { this.ready = false; this.sock = null; for (const [, p] of this.pending) p.reject(new Error('RCON closed')); this.pending.clear(); });
-      s.once('connect', () => {
-        this.sock = s; s.setTimeout(0);
-        const id = ++this.id;
-        this.pending.set(id, { auth: true, resolve: () => { this.ready = true; s.removeListener('error', fail); s.on('error', (e) => log('RCON алдаа:', e.message)); resolve(); }, reject: fail, chunks: [] });
-        s.write(this.packet(id, 3, this.password));
-      });
-    });
-  }
-  onData(d) {
-    this.buf = Buffer.concat([this.buf, d]);
-    while (this.buf.length >= 4) {
-      const size = this.buf.readInt32LE(0); if (this.buf.length < size + 4) break;
-      const id = this.buf.readInt32LE(4), type = this.buf.readInt32LE(8);
-      const body = this.buf.slice(12, 4 + size - 2).toString('utf8');
-      this.buf = this.buf.slice(4 + size);
-      if (type === 2 && id === -1) { const p = [...this.pending.values()].find(x => x.auth); if (p) p.reject(new Error('RCON нууц үг буруу')); continue; }
-      const p = this.pending.get(id);
-      if (p && p.auth) { if (type === 2) { this.pending.delete(id); p.resolve(); } continue; }
-      if (p) { p.chunks.push(body); clearTimeout(p.t); p.t = setTimeout(() => { this.pending.delete(id); p.resolve(p.chunks.join('')); }, 120); }
-      // "end marker": хоосон хүсэлтийн хариу ирвэл өмнөх хариу дууссан гэсэн үг
-      const end = [...this.pending.entries()].find(([, x]) => x.endFor === id);
-      if (end) { const [eid, e] = end; this.pending.delete(eid); const q = this.pending.get(e.target); if (q) { clearTimeout(q.t); this.pending.delete(e.target); q.resolve(q.chunks.join('')); } }
-    }
-  }
-  // Хариу хэрэггүй convar тавих команд: хүлээхгүйгээр дараалуулан илгээнэ (exec хариу бүрийг ~120ms хүлээдэг).
-  // Сервер пакетуудыг ирсэн дарааллаар нь гүйцэтгэнэ; хариуг нь (id бүртгэлгүй) үл тооно. Нэг пакет = нэг команд.
-  send(cmd) {
-    if (!this.ready || !this.sock) return false;
-    this.sock.write(this.packet(++this.id, 2, cmd)); return true;
-  }
-  exec(cmd, timeout = 5000) {
-    if (!this.ready || !this.sock) return Promise.reject(new Error('RCON холбогдоогүй'));
-    return new Promise((resolve, reject) => {
-      const id = ++this.id;
-      const entry = { resolve, reject, chunks: [] };
-      this.pending.set(id, entry);
-      const guard = setTimeout(() => { if (this.pending.has(id)) { this.pending.delete(id); resolve(entry.chunks.join('')); } }, timeout);
-      const done = entry.resolve; entry.resolve = (v) => { clearTimeout(guard); done(v); };
-      this.sock.write(this.packet(id, 2, cmd));
-    });
-  }
-  close() { try { this.sock && this.sock.destroy(); } catch (e) { /* ignore */ } }
-}
+/* Source RCON client → agent/rcon.js (1.5.1: дараалал, echo маркер, timeout/хоосон хариу ялгах, дахин холболт) */
+const { Rcon } = require('./rcon');
+const { createGuard } = require('./guard');
 
 /* ---------- state ---------- */
-const rcon = new Rcon(CFG.rconHost, CFG.rconPort, CFG.rconPassword);
+const rcon = new Rcon(CFG.rconHost, CFG.rconPort, CFG.rconPassword, { log });
 const state = { online: false, map: null, mode: 'competitive', phase: 'unknown', score: null, players: [], hostname: null, matchzy: false,
   settings: {}, appliedTeamsVersion: null, lastSettingsAt: 0, lastPluginCheck: 0,
   // Phase 3: BERX Guard (CounterStrikeSharp плагин) — Ranked AIM-ийн sv_cheats/point_servercommand хамгаалалт. null = шалгаагүй
@@ -197,13 +138,30 @@ async function checkPlugins() {
   const r = await rcon.exec('css_plugins list').catch(() => '');
   state.matchzy = /matchzy/i.test(r);
   await checkBerxGuard();
+  // Ranked AIM явагдаагүй үед хамгаалалт асаалттай үлдсэн бол (гар аргаар асаасан, agent гэнэт зогссон г.м.) унтраана
+  if (state.guard && state.guard.ok && state.guard.enforcing && !(arena.aim && arena.aim.ranked)) {
+    log('⚠ BERX Guard Ranked AIM-аас гадуур асаалттай байна — унтраана (Competitive/Practice-д sv_cheats шаардлагатай)');
+    await checkBerxGuard('css_berx_guard_off');
+  }
 }
-// BERX Guard-ийн төлөв: зөвхөн уншина (серверийн тохиргоо өөрчлөхгүй). Хариу: "BERX_GUARD ok v=1.0.0 cheats_locked=1 ..."
+// BERX Guard (agent/guard.js): echo маркертай найдвартай уншилт, хязгаарлагдмал дахин оролдлого (timeout → RCON дахин холбох).
+// Ангилал: ok | degraded | not_installed | empty | timeout | rcon_down | invalid
+const workshopBusy = () => !!(arena && arena.workshop && ['requested', 'downloading', 'loading'].includes(arena.workshop.phase));
+const guardClient = createGuard({
+  query: (cmd) => rcon.query(cmd, { timeout: 4000 }),
+  reconnect: async () => { await rcon.reconnect(); log('✓ RCON дахин холбогдлоо (BERX Guard шалгалт)'); },
+  canReconnect: () => !workshopBusy(),
+  log
+});
 async function checkBerxGuard(cmd = 'css_berx_guard_status') {
-  const r = await rcon.exec(cmd).catch(e => 'ERR ' + e.message);
-  const m = String(r).match(/BERX_GUARD\s+(ok|degraded)\s+v=([\w.-]{1,16})(?:\s+enforcing=([01]))?(?:\s+cheats=([01]))?/);
-  state.guard = m ? { ok: m[1] === 'ok', version: m[2], enforcing: m[3] === '1', cheats: m[4] === '1', checkedAt: Date.now(), error: m[1] === 'ok' ? null : String(r).slice(0, 160) }
-    : { ok: false, version: null, checkedAt: Date.now(), error: /unknown command/i.test(r) ? 'not_installed' : String(r).replace(/\s+/g, ' ').slice(0, 160) };
+  const prev = state.guard;
+  const g = await guardClient.run(cmd);
+  // Плагин баталгаатай байсан бөгөөд одоо түр хариугүй (timeout/хоосон) бол хувилбарыг санана — гэхдээ ok=false (хамгаалалт тойрохгүй)
+  state.guard = { ...g, version: g.version || (prev && prev.version) || null };
+  if (!prev || prev.state !== g.state) {
+    if (g.ok) log(`✓ BERX Guard v${g.version}: enforcing=${g.enforcing ? 1 : 0} cheats=${g.cheats ? 1 : 0}`);
+    else if (g.state !== 'not_installed' || (prev && prev.state !== 'not_installed')) log(`⚠ BERX Guard: ${guardClient.MESSAGES[g.state] || g.state}${g.error ? ' (' + g.error + ')' : ''}`);
+  }
   return state.guard;
 }
 
@@ -472,8 +430,9 @@ function leaveAimCommands() {
   stopGuard();
   const cmds = [...stopAimLogCommands(), ...arenaLib.restoreCommands(arena.snapshot)];
   if (state.matchzy || arena.matchzyAutostart !== null) cmds.push(`matchzy_autostart_mode ${[0, 1, 2].includes(arena.matchzyAutostart) ? arena.matchzyAutostart : 1}`);
-  // Ranked AIM-ийн BERX Guard хамгаалалтыг унтраана (Competitive/Practice-д нөлөөлөхгүй)
-  if (state.guard && state.guard.enforcing) { cmds.push('css_berx_guard_off'); state.guard.enforcing = false; }
+  // Ranked AIM-ийн BERX Guard хамгаалалтыг унтраана (Competitive/Practice-д нөлөөлөхгүй).
+  // Кэш "унтраалттай" гэж харуулсан ч плагин суусан бол заавал илгээнэ (кэш хуучирсан байж болно; idempotent).
+  if (state.guard && state.guard.version) { cmds.push('css_berx_guard_off'); state.guard.enforcing = false; }
   return cmds;
 }
 function clearAim() {
@@ -517,17 +476,41 @@ async function handleOptional(badOpt) {
   if (badOpt.includes('mp_equipment_reset_rounds')) w.push('mp_equipment_reset_rounds-ийг сервер хүлээж аваагүй — амьд үлдсэн тоглогчийн сум round бүр бүрэн дүүрэхгүй байж болно');
   return { warning: w.join(' · ') || null };
 }
-// Ranked AIM: BERX Guard ажиллаж буйг ЯГ ОДОО шалгана. Байхгүй бол татгалзана (Casual AIM хэвийн ажиллана).
+// Ranked AIM: BERX Guard-ийг ЯГ ОДОО эерэгээр баталгаажуулна: ok + асаалт + enforcing=1 + cheats=0 (дахин уншиж шалгана).
+// Аль нэг нь бүтэлгүйтвэл Ranked AIM эхлэхгүй (Casual AIM хэвийн). Хамгаалалтыг тойрох зам байхгүй.
+class GuardError extends Error {}
 async function requireGuard() {
+  const why = (g) => `${guardClient.MESSAGES[g.state] || g.state}${g.error ? ' — ' + g.error : ''}`;
   let g = await checkBerxGuard();
-  if (!g.ok) throw new Error('BERX Guard плагин серверт илрээгүй (' + (g.error || 'unknown') + ') — Ranked AIM боломжгүй. Casual-аар эхлүүлнэ үү.');
+  if (!g.ok) throw new GuardError(`BERX Guard баталгаажсангүй: ${why(g)} — Ranked AIM боломжгүй. Casual-аар эхлүүлнэ үү.`);
   g = await checkBerxGuard('css_berx_guard_on');          // зөвхөн Ranked AIM-ийн үед хамгаалалт асаана
-  if (!g.ok || !g.enforcing || g.cheats) throw new Error('BERX Guard хамгаалалт асаагүй (enforcing=' + (g.enforcing ? 1 : 0) + ', sv_cheats=' + (g.cheats ? 1 : 0) + ') — Ranked AIM боломжгүй');
+  if (guardClient.enforced(g)) g = await checkBerxGuard();  // асаасны дараа тусад нь дахин уншиж батална
+  if (!guardClient.enforced(g)) {
+    await checkBerxGuard('css_berx_guard_off').catch(() => {});
+    throw new GuardError(`BERX Guard хамгаалалт баталгаажсангүй (${g.ok ? `enforcing=${g.enforcing ? 1 : 0}, sv_cheats=${g.cheats ? 1 : 0}` : why(g)}) — Ranked AIM боломжгүй`);
+  }
+  lastGuardUpkeep = Date.now();
 }
 // Ranked AIM-аас гарах / Casual болоход хамгаалалтыг унтраана (Practice горимын sv_cheats 1-д саад болохгүй)
 async function releaseGuard() {
-  if (!state.guard || !state.guard.version || !state.guard.enforcing) return;
+  if (!state.guard || !state.guard.version) return;              // плагин суугаагүй
+  if (state.guard.ok && state.guard.enforcing === false) return; // аль хэдийн унтраалттай (баталгаатай уншилт)
   await checkBerxGuard('css_berx_guard_off').catch(() => {});
+}
+// Ranked AIM явагдаж байхад (map ачаалал, round эхлэл, MatchZy/cfg) хамгаалалт асаалттай хэвээр эсэхийг 15с тутам шалгана
+let lastGuardUpkeep = 0;
+async function guardUpkeep(force = false) {
+  if (!(arena.aim && arena.aim.ranked) || workshopBusy() || (!force && Date.now() - lastGuardUpkeep < 15000)) return;
+  lastGuardUpkeep = Date.now();
+  let g = await checkBerxGuard();
+  if (g.ok && !g.enforcing) {
+    log('⚠ BERX Guard Ranked AIM-ийн үед унтарсан байна (плагин дахин ачаалагдсан?) — дахин асаана');
+    g = await checkBerxGuard('css_berx_guard_on');
+  }
+  if (!guardClient.enforced(g)) {
+    log('⚠ BERX Guard баталгаажихгүй байна — энэ Ranked AIM тоглолт BRP авахгүй (' + (g.error || `enforcing=${g.enforcing ? 1 : 0} cheats=${g.cheats ? 1 : 0}`) + ')');
+    if (matchHistory && matchHistory.markGuardLost) matchHistory.markGuardLost(Date.now());
+  }
 }
 const ARENA_HANDLERS = {
   // Competitive-ийн дараагийн тоглолтын төрөл. going_live-д түгжигдэнэ; явж буй тоглолтын төрөл өөрчлөгдөхгүй.
@@ -571,11 +554,14 @@ const ARENA_HANDLERS = {
     const w = arena.workshop, entry = wsEntry(arena.aim.map), wf = arenaLib.workshopFiles(CFG.cs2Dir, entry.workshopId);
     const onMapNow = arenaLib.isOnMap(state.map, entry, wf ? wf.names : []);
     if (!w || !(['ready', 'configuring'].includes(w.phase) || (w.phase === 'error' && onMapNow))) throw new Error('AIM map хараахан бэлэн болоогүй байна');
-    if (a && a.size !== undefined) Object.assign(arena.aim, arenaLib.aimSettings(a, entry));
-    // Төрөл: тодорхой ирвэл түүгээр, үгүй бол өмнөхийг хадгална. First to 10 → Casual.
-    if (a && typeof a.ranked === 'boolean') arena.aim.ranked = a.ranked;
-    if (arena.aim.rounds === 10) arena.aim.ranked = false;
-    if (arena.aim.ranked) await requireGuard(); else await releaseGuard();
+    // Шинэ тохиргоо/төрлийг эхлээд тооцоолж, Guard баталгаажсаны ДАРАА л хэрэгжүүлнэ
+    // (татгалзсан Ranked rematch нь өмнөх төлөвийг "ranked" болгож үлдээх ёсгүй).
+    const next = a && a.size !== undefined ? arenaLib.aimSettings(a, entry) : {};
+    const rounds = next.rounds !== undefined ? next.rounds : arena.aim.rounds;
+    let ranked = a && typeof a.ranked === 'boolean' ? a.ranked : arena.aim.ranked === true;   // тодорхой ирвэл түүгээр, үгүй бол өмнөхийг
+    if (rounds === 10) ranked = false;                                                     // First to 10 → Casual
+    if (ranked) await requireGuard(); else await releaseGuard();
+    Object.assign(arena.aim, next); arena.aim.ranked = ranked;
     guardOff = false;
     w.error = null; w.warning = null; w.verified = false;
     await startAimLog();
@@ -606,6 +592,7 @@ const ARENA_HANDLERS = {
 
 // Tick бүрт: Workshop ачаалалтын явц, AIM тохиргоо хэрэгжүүлэх/шалгах (сервер өөрөө батлахыг хүлээнэ)
 async function arenaTick() {
+  await guardUpkeep();
   const w = arena.workshop; if (!w || !arenaLib) return;
   if (arena.aim && guardOff) return;                     // AIM-аас гарч байна (сэргээлт явагдаж байна)
   const entry = wsEntry(w.id); if (!entry) return;
@@ -618,7 +605,8 @@ async function arenaTick() {
       w.onMapAt = w.onMapAt || now;
       if (w.runtimeMap !== state.map) { w.runtimeMap = state.map; log(`✓ Сервер map-аа мэдээллээ: ${state.map}`); }
       // MatchZy sleep.cfg / gamemode cfg map эхэлснээс ~1с дараа ажилладаг → 3с хүлээгээд AIM тохиргоо
-      if (now - w.onMapAt >= 3000 && (!w.configAt || (now - w.configAt > 20000 && !w.verified))) await applyAimConfig();
+      // Ranked: map ачаалагдсаны дараа (плагин дахин ачаалагдсан байж болно) тоглолт эхлэхээс ӨМНӨ Guard-ийг дахин баталгаажуулна
+      if (now - w.onMapAt >= 3000 && (!w.configAt || (now - w.configAt > 20000 && !w.verified))) { await guardUpkeep(true); await applyAimConfig(); }
       if (w.configAt && now - w.configAt >= 1000) {
         const v = await verifyAim();
         if (v.ok) {
@@ -667,6 +655,7 @@ async function runCommand(c) {
     let pre = [];
     // AIM-аас өөр map/горим руу шилжвэл өмнөх тохиргоог ЭХЛЭЭД сэргээнэ
     if (arena.aim && (c.type === 'changemap' || c.type === 'mode')) { pre = leaveAimCommands(); clearAim(); note = 'AIM-аас гарч өмнөх тохиргоог сэргээлээ. '; }
+    else if ((c.type === 'changemap' || c.type === 'mode') && state.guard && state.guard.version) pre = ['css_berx_guard_off'];   // кэшээс үл хамааран (idempotent)   // Practice/Competitive-д Guard унтраалттай
     if (c.type === 'apply_teams') cmds = writeMatchConfig();
     else if (ARENA_HANDLERS[c.type]) { const r = await ARENA_HANDLERS[c.type](c.args || {}); cmds = r.cmds || []; note += r.output || ''; }
     else { const h = HANDLERS[c.type]; if (!h) throw new Error('Зөвшөөрөгдөөгүй команд: ' + c.type); cmds = h(c.args || {}); }
@@ -680,7 +669,13 @@ async function runCommand(c) {
     log('✓', c.type, JSON.stringify(c.args || {}));
     state.lastSettingsAt = 0;
     return { ok: true, output: (note ? note + (out.trim() ? ' · ' : '') : '') + out.trim().slice(0, 500 - note.length) };
-  } catch (e) { log('✖', c.type, e.message); return { ok: false, output: e.message }; }
+  } catch (e) {
+    // Командын түвшний татгалзал (жишээ нь Ranked AIM-д Guard баталгаажаагүй) нь agent/серверийн эвдрэл БИШ.
+    // "✖" тэмдэг launcher-т "Agent Error / SERVER OFFLINE" гэж харагддаг тул энд "⚠" ашиглана.
+    log('⚠ Команд амжилтгүй:', c.type, '—', e.message);
+    if (state.guard && state.guard.version && !state.guard.ok) state.lastPluginCheck = 0;   // дараагийн tick-т Guard төлөвийг дахин унших
+    return { ok: false, output: e.message };
+  }
 }
 
 /* ---------- сайттай харилцах ---------- */
@@ -710,7 +705,13 @@ async function heartbeat() {
   });
 }
 
-let busy = false, lastErr = '';
+let busy = false, lastErr = '', lastHeartbeatAt = 0, hbInFlight = false;
+// RCON уншилт удааширсан үед ч (timeout, map ачаалал) сайт руу heartbeat тасралтгүй явна → "SERVER OFFLINE" гэж буруу харагдахгүй
+async function sendHeartbeat() {
+  if (hbInFlight) return; hbInFlight = true;
+  try { await heartbeat(); lastHeartbeatAt = Date.now(); } finally { hbInFlight = false; }
+}
+setInterval(() => { if (busy && Date.now() - lastHeartbeatAt > Math.max(10000, CFG.pollMs * 2)) sendHeartbeat().catch(() => {}); }, 3000).unref();
 async function tick() {
   if (busy) return; busy = true;
   try {
@@ -728,7 +729,7 @@ async function tick() {
     } else { state.players = []; state.statusOk = false; }
     try { await arenaTick(); } catch (e) { log('⚠ Workshop/AIM:', e.message); }
     if (matchHistory) { try { matchHistory.tick({ players: state.statusOk ? state.players : [], map: state.statusOk ? state.map : null, online: state.online, aim: !!arena.aim }); } catch (e) { log('⚠ Тоглолтын түүх:', e.message); } }
-    await heartbeat();
+    await sendHeartbeat();
     const poll = await api('poll');
     if (poll.teams) lastTeams = { teams: poll.teams, version: poll.teamsVersion };
     let arenaCmd = false;
@@ -738,7 +739,7 @@ async function tick() {
       if (ARENA_HANDLERS[c.type] || c.type === 'changemap' || c.type === 'mode') arenaCmd = true;
     }
     // Workshop/AIM эхэлсэн бол сайт шууд мэдэх ёстой (татах үед сервер удаан хариу өгөхгүй байж болно)
-    if (arenaCmd) await heartbeat().catch(() => {});
+    if (arenaCmd) await sendHeartbeat().catch(() => {});
     if (lastErr) { log('✓ Сайттай холболт сэргэлээ'); lastErr = ''; }
   } catch (e) { if (e.message !== lastErr) log('✖', e.message); lastErr = e.message; }
   finally { busy = false; }

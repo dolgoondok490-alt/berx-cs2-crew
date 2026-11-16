@@ -112,7 +112,7 @@ let dec = l && await decision(l[0].id);
 ok(l && l[0].match_type === 'ranked' && dec && dec.status === 'rated', 'Ranked 5v5 → бичигдэж, сервер өөрөө BRP тооцоолсон (rated)');
 let db = await dump();
 const lock = db.berx_matches.find(x => x.id === l[0].id).lock;
-ok(lock && lock.roster.CT.length === 5 && lock.roster.T.length === 5 && lock.agent === '1.5.0' && lock.rules.server_mode === 'competitive', 'agent: going_live-д 5v5 roster, дүрэм түгжсэн');
+ok(lock && lock.roster.CT.length === 5 && lock.roster.T.length === 5 && /^1\.5\.\d+$/.test(lock.agent) && lock.rules.server_mode === 'competitive', 'agent (1.5.x): going_live-д 5v5 roster, дүрэм түгжсэн');
 const chg = db.berx_rating_changes.filter(c => c.match_id === l[0].id);
 const wins = chg.filter(c => c.result === 'win'), losses = chg.filter(c => c.result === 'loss');
 ok(chg.length === 10 && wins.length === 5 && wins.every(c => c.delta >= 150 && c.delta <= 230) && losses.every(c => c.delta <= -130 && c.delta >= -200), `ялагч +150…+230 (${wins.map(c => c.delta).join(',')}), ялагдагч −130…−200 (${losses.map(c => c.delta).join(',')})`);
